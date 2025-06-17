@@ -1,8 +1,11 @@
+# main.py
 """Main script to run socioeconomic analysis"""
 
 import argparse
 from data_processor import SocioEconomicProcessor
 import pandas as pd
+import numpy as np
+import os
 
 def main():
     parser = argparse.ArgumentParser(description='Generate socioeconomic variables from satellite imagery')
@@ -10,7 +13,7 @@ def main():
     parser.add_argument('--start_date', required=True, help='Start date (YYYY-MM-DD)')
     parser.add_argument('--end_date', required=True, help='End date (YYYY-MM-DD)')
     parser.add_argument('--mining_sites', help='Path to mining sites shapefile (optional)')
-    parser.add_argument('--output', default='panel_data.csv', help='Output CSV file')
+    parser.add_argument('--output', default='outputs/panel_data.csv', help='Output CSV file')
     
     args = parser.parse_args()
     
