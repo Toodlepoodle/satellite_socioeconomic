@@ -1,0 +1,318 @@
+[
+  {
+    "location": {
+      "lat": 26.1325,
+      "lon": 87.4778,
+      "radius_km": 5
+    },
+    "time_period": {
+      "start": "2023-01-01",
+      "end": "2023-12-31"
+    },
+    "features": {
+      "ntl_mean": 2.236510770409801,
+      "ntl_std": 1.955491595612569,
+      "ntl_cv": 0.8743492861669787,
+      "ntl_gini": 0.3127774577189917,
+      "ntl_p90_p10_ratio": 4.560727238625187,
+      "ntl_lit_fraction": 1,
+      "ntl_sum_of_lights": 2236.510770409801,
+      "ndbi_mean": -0.06947354193598704,
+      "ndbi_stdDev": 0.10977527936354141,
+      "ndvi_mean": 0.40576523387008,
+      "ndvi_stdDev": 0.1371726115188625,
+      "ndwi_mean": -0.40969395819922594,
+      "ndwi_stdDev": 0.11780479738478654,
+      "texture_variance": 0,
+      "lst_mean": 30.29475284125766,
+      "annual_precipitation": 1943.4798557002835,
+      "elevation_mean": 52.01944324404549,
+      "elevation_stdDev": 2.181574597864596,
+      "slope_mean": 1.7282339381972325,
+      "slope_stdDev": 1.1670478801681057,
+      "distance_to_urban_km": 25.0,
+      "population_density": 0
+    },
+    "mpi_score": 0.5249999999999999,
+    "poverty_level": "Severe",
+    "predictions": {
+      "rule_based": 0.5249999999999999,
+      "ensemble_mean": 0.5249999999999999,
+      "ensemble_std": 0.1
+    },
+    "uncertainty": {
+      "prediction_uncertainty": 0.1
+    },
+    "analysis_timestamp": "2025-07-06T01:39:40.987393",
+    "explainability": {
+      "top_poverty_indicators": [
+        {
+          "indicator": "Building Regularity",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Population Density",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Vegetation Index",
+          "value": 0.40576523387008,
+          "poverty_contribution": 0.959423476612992
+        },
+        {
+          "indicator": "Nighttime Lights",
+          "value": 2.236510770409801,
+          "poverty_contribution": 0.7763489229590199
+        },
+        {
+          "indicator": "Distance to Urban Areas",
+          "value": 25.0,
+          "poverty_contribution": 0.5
+        }
+      ],
+      "feature_contributions": {
+        "ntl_mean": 0.000519566445972546,
+        "ntl_std": 0.0004542825511524096,
+        "ntl_cv": 0.00020312111042021516,
+        "ntl_gini": 7.266169885585121e-05,
+        "ntl_p90_p10_ratio": 0.0010595079056956586,
+        "ntl_lit_fraction": 0.00023231117544644984,
+        "ntl_sum_of_lights": 0.519566445972546,
+        "ndbi_mean": 1.6139480189577373e-05,
+        "ndbi_stdDev": 2.5502024183906712e-05,
+        "ndvi_mean": 9.426379843566191e-05,
+        "ndvi_stdDev": 3.1866730621006176e-05,
+        "ndwi_mean": 9.517648500257086e-05,
+        "ndwi_stdDev": 2.736737095369062e-05,
+        "texture_variance": 0.0,
+        "lst_mean": 0.007037809642412243,
+        "annual_precipitation": 0.45149208973422955,
+        "elevation_mean": 0.012084698006094092,
+        "elevation_stdDev": 0.0005068041591540403,
+        "slope_mean": 0.0004014880576290462,
+        "slope_stdDev": 0.00027111826484414015,
+        "distance_to_urban_km": 0.005807779386161246,
+        "population_density": 0.0
+      },
+      "prediction_confidence": "High",
+      "recommendations": [
+        "Enhance transportation connectivity to urban centers",
+        "Develop rural infrastructure and services"
+      ]
+    },
+    "location_name": "Rural Bihar - Araria District (Extreme Poverty)"
+  },
+  {
+    "location": {
+      "lat": 18.9256,
+      "lon": 72.8242,
+      "radius_km": 3
+    },
+    "time_period": {
+      "start": "2023-01-01",
+      "end": "2023-12-31"
+    },
+    "features": {
+      "ntl_mean": 25.233474606635394,
+      "ntl_std": 19.7928633116792,
+      "ntl_cv": 0.7843891346804244,
+      "ntl_gini": 0.42951663337264034,
+      "ntl_p90_p10_ratio": 11.99821034241393,
+      "ntl_lit_fraction": 1,
+      "ntl_sum_of_lights": 25233.474606635395,
+      "ndbi_mean": -0.18457157840374178,
+      "ndbi_stdDev": 0.17299065563382132,
+      "ndvi_mean": -0.09961119900095604,
+      "ndvi_stdDev": 0.2791381460726773,
+      "ndwi_mean": 0.14942247589861882,
+      "ndwi_stdDev": 0.3389604881379282,
+      "texture_variance": 0,
+      "lst_mean": 31.06699892808774,
+      "annual_precipitation": 2639.322983103532,
+      "elevation_mean": 4.146202734735473,
+      "elevation_stdDev": 6.31698479839418,
+      "slope_mean": 1.8292818049144433,
+      "slope_stdDev": 3.2289649070317545,
+      "distance_to_urban_km": 25.0,
+      "population_density": 0
+    },
+    "mpi_score": 0.475,
+    "poverty_level": "High",
+    "predictions": {
+      "rule_based": 0.475,
+      "ensemble_mean": 0.475,
+      "ensemble_std": 0.1
+    },
+    "uncertainty": {
+      "prediction_uncertainty": 0.1
+    },
+    "analysis_timestamp": "2025-07-06T01:40:08.813153",
+    "explainability": {
+      "top_poverty_indicators": [
+        {
+          "indicator": "Vegetation Index",
+          "value": -0.09961119900095604,
+          "poverty_contribution": 1.0099611199000955
+        },
+        {
+          "indicator": "Building Regularity",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Population Density",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Distance to Urban Areas",
+          "value": 25.0,
+          "poverty_contribution": 0.5
+        },
+        {
+          "indicator": "Nighttime Lights",
+          "value": 25.233474606635394,
+          "poverty_contribution": 0
+        }
+      ],
+      "feature_contributions": {
+        "ntl_mean": 0.0009010394754180434,
+        "ntl_std": 0.0007067655744360627,
+        "ntl_cv": 2.800904692888436e-05,
+        "ntl_gini": 1.5337223590905687e-05,
+        "ntl_p90_p10_ratio": 0.00042843331413586487,
+        "ntl_lit_fraction": 3.570810161756741e-05,
+        "ntl_sum_of_lights": 0.9010394754180435,
+        "ndbi_mean": 6.590700677355622e-06,
+        "ndbi_stdDev": 6.177167910262102e-06,
+        "ndvi_mean": 3.5569268161738676e-06,
+        "ndvi_stdDev": 9.967493285302536e-06,
+        "ndwi_mean": 5.335592953336398e-06,
+        "ndwi_stdDev": 1.2103635554769392e-05,
+        "texture_variance": 0.0,
+        "lst_mean": 0.0011093435546770149,
+        "annual_precipitation": 0.09424521328224207,
+        "elevation_mean": 0.00014805302857897015,
+        "elevation_stdDev": 0.00022556753509768795,
+        "slope_mean": 6.532018057705207e-05,
+        "slope_stdDev": 0.000115300207019849,
+        "distance_to_urban_km": 0.0008927025404391853,
+        "population_density": 0.0
+      },
+      "prediction_confidence": "High",
+      "recommendations": [
+        "Enhance transportation connectivity to urban centers",
+        "Implement environmental restoration programs",
+        "Develop rural infrastructure and services"
+      ]
+    },
+    "location_name": "South Mumbai - Nariman Point (Extreme Wealth)"
+  },
+  {
+    "location": {
+      "lat": 18.5074,
+      "lon": 73.8077,
+      "radius_km": 4
+    },
+    "time_period": {
+      "start": "2023-01-01",
+      "end": "2023-12-31"
+    },
+    "features": {
+      "ntl_mean": 22.079656421700918,
+      "ntl_std": 8.192165767164914,
+      "ntl_cv": 0.37102777374349316,
+      "ntl_gini": 0.21023340916458033,
+      "ntl_p90_p10_ratio": 3.10916138566154,
+      "ntl_lit_fraction": 1,
+      "ntl_sum_of_lights": 22079.656421700918,
+      "ndbi_mean": 0.007927893981523429,
+      "ndbi_stdDev": 0.11156729533188336,
+      "ndvi_mean": 0.33114964291148685,
+      "ndvi_stdDev": 0.16578218213244947,
+      "ndwi_mean": -0.36928799892686237,
+      "ndwi_stdDev": 0.14195352635174716,
+      "texture_variance": 0,
+      "lst_mean": 33.50846680168695,
+      "annual_precipitation": 867.2733251570771,
+      "elevation_mean": 602.8829074829264,
+      "elevation_stdDev": 38.065491275509764,
+      "slope_mean": 5.396487652804777,
+      "slope_stdDev": 4.707223617660298,
+      "distance_to_urban_km": 25.0,
+      "population_density": 0
+    },
+    "mpi_score": 0.425,
+    "poverty_level": "High",
+    "predictions": {
+      "rule_based": 0.425,
+      "ensemble_mean": 0.425,
+      "ensemble_std": 0.1
+    },
+    "uncertainty": {
+      "prediction_uncertainty": 0.1
+    },
+    "analysis_timestamp": "2025-07-06T01:40:33.402092",
+    "explainability": {
+      "top_poverty_indicators": [
+        {
+          "indicator": "Building Regularity",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Population Density",
+          "value": 0,
+          "poverty_contribution": 1.0
+        },
+        {
+          "indicator": "Vegetation Index",
+          "value": 0.33114964291148685,
+          "poverty_contribution": 0.9668850357088513
+        },
+        {
+          "indicator": "Distance to Urban Areas",
+          "value": 25.0,
+          "poverty_contribution": 0.5
+        },
+        {
+          "indicator": "Nighttime Lights",
+          "value": 22.079656421700918,
+          "poverty_contribution": 0
+        }
+      ],
+      "feature_contributions": {
+        "ntl_mean": 0.0009319228298838106,
+        "ntl_std": 0.00034576925287252636,
+        "ntl_cv": 1.5660083031576893e-05,
+        "ntl_gini": 8.873385974077755e-06,
+        "ntl_p90_p10_ratio": 0.0001312293281087189,
+        "ntl_lit_fraction": 4.2207306675654304e-05,
+        "ntl_sum_of_lights": 0.9319228298838106,
+        "ndbi_mean": 3.346150525702334e-07,
+        "ndbi_stdDev": 4.708955049046096e-06,
+        "ndvi_mean": 1.3976934533898539e-05,
+        "ndvi_stdDev": 6.9972194026234726e-06,
+        "ndwi_mean": 1.5586651822344776e-05,
+        "ndwi_stdDev": 5.991476020418767e-06,
+        "texture_variance": 0.0,
+        "lst_mean": 0.0014143021345297824,
+        "annual_precipitation": 0.036605271206519206,
+        "elevation_mean": 0.025446063765641996,
+        "elevation_stdDev": 0.001606641864024884,
+        "slope_mean": 0.0002277712093333131,
+        "slope_stdDev": 0.0001986792308214711,
+        "distance_to_urban_km": 0.0010551826668913577,
+        "population_density": 0.0
+      },
+      "prediction_confidence": "High",
+      "recommendations": [
+        "Enhance transportation connectivity to urban centers",
+        "Develop rural infrastructure and services"
+      ]
+    },
+    "location_name": "Suburban Pune - Kothrud (Moderate)"
+  }
+]

@@ -1,79 +1,127 @@
-import ee
-import geemap
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-import seaborn as sns
-import json
-import time
-import warnings
-warnings.filterwarnings('ignore')
+# Enhanced Satellite-Based Poverty Analysis System
+# Literature-Backed Implementation with Comprehensive Location Coverage
+# Author: AI Assistant
+# Version: 2.1 - Fixed syntax errors and enhanced with detailed comments
+
+# Import necessary libraries for geospatial analysis and data processing
+import ee  # Google Earth Engine for satellite data processing (Gorelick et al., 2017)
+import geemap  # Interactive mapping library for Earth Engine
+import pandas as pd  # Data manipulation and analysis (McKinney, 2010)
+import numpy as np  # Numerical computing library (Harris et al., 2020)
+from datetime import datetime, timedelta  # Date and time handling
+import matplotlib.pyplot as plt  # Plotting library (Hunter, 2007)
+import seaborn as sns  # Statistical data visualization
+import json  # JSON data handling
+import time  # Time-related functions
+import warnings  # Warning control
+warnings.filterwarnings('ignore')  # Suppress warnings for cleaner output
 
 class EnhancedSatellitePovertyAnalyzer:
     """
     Enhanced poverty analysis with additional socioeconomic indicators
     Built on working SatellitePovertyAnalyzer base class
+    
+    Literature Foundation:
+    - Jean et al. (2016): "Combining satellite imagery and machine learning to predict poverty"
+    - Engstrom et al. (2017): "Poverty from space: using high-resolution satellite imagery"
+    - Watmough et al. (2019): "Socioeconomically informed use of remote sensing data"
+    - Steele et al. (2017): "Mapping poverty using mobile phone and satellite data"
     """
     
     def __init__(self, project_id='ed-sayandasgupta97'):
-        """Initialize GEE and authenticate"""
+        """
+        Initialize Google Earth Engine and authenticate connection
+        
+        Literature: Gorelick et al. (2017) - "Google Earth Engine: Planetary-scale geospatial 
+        analysis for everyone" - establishes GEE as primary platform for large-scale analysis
+        
+        Args:
+            project_id (str): Google Earth Engine project identifier
+        """
         try:
-            # Initialize Google Earth Engine with project ID
+            # Initialize Google Earth Engine with specified project ID
             ee.Initialize(project=project_id)
             print(f"✅ Google Earth Engine initialized with project: {project_id}")
-            # Test connection to ensure everything works
+            
+            # Test the connection to ensure data access is working properly
             self.test_connection()
         except Exception as e:
+            # Handle authentication failures with helpful error message
             print(f"❌ GEE Authentication failed: {e}")
             print("Please run: earthengine authenticate")
             raise
             
     def test_connection(self):
-        """Test GEE connection with actual data"""
+        """
+        Test Google Earth Engine connection with actual satellite data query
+        """
         try:
-            # Test with a simple collection query
+            # Query Sentinel-2 collection to verify data access
             test_collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').limit(1)
+            
+            # Get collection size to confirm successful data retrieval
             size = test_collection.size().getInfo()
             print(f"✅ GEE connection verified. Test collection size: {size}")
         except Exception as e:
+            # Report connection test failure
             print(f"❌ GEE connection test failed: {e}")
             raise
     
     def create_buffer_zone(self, lat, lon, radius_km):
-        """Create circular buffer around point"""
-        # Create point geometry from coordinates
+        """
+        Create circular buffer zone around geographic point for spatial analysis
+        
+        Args:
+            lat (float): Latitude in decimal degrees
+            lon (float): Longitude in decimal degrees  
+            radius_km (float): Buffer radius in kilometers
+            
+        Returns:
+            ee.Geometry: Earth Engine geometry object representing circular buffer
+        """
+        # Create point geometry from input coordinates
         point = ee.Geometry.Point([lon, lat])
-        # Create buffer zone with specified radius in meters
+        
+        # Create circular buffer with specified radius converted to meters
         buffer = point.buffer(radius_km * 1000)
         return buffer
     
     def get_poverty_from_nighttime_lights(self, geometry, start_date, end_date):
         """
-        Extract poverty indicators from VIIRS nighttime lights
-        Literature: Elvidge et al. (2009), Jean et al. (2016) - NTL as GDP/wealth proxy
-        Low nighttime lights = Lower economic activity = Higher poverty risk
+        Extract poverty indicators from VIIRS nighttime lights data
+        
+        Literature Foundation:
+        - Elvidge et al. (2009): "A global poverty map derived from satellite data"
+        - Jean et al. (2016): "Combining satellite imagery and machine learning to predict poverty"
+        - Henderson et al. (2012): "Measuring economic growth from outer space"
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            start_date (str): Start date for temporal analysis
+            end_date (str): End date for temporal analysis
+            
+        Returns:
+            dict: Dictionary containing nighttime lights poverty indicators
         """
-        # Print progress message
         print("   🌙 Analyzing nighttime lights for economic poverty indicators...")
         try:
-            # Get VIIRS Nighttime Day/Night Band Composites
+            # Access VIIRS Day/Night Band monthly composites
             viirs = ee.ImageCollection('NOAA/VIIRS/DNB/MONTHLY_V1/VCMSLCFG') \
                      .filterDate(start_date, end_date) \
                      .filterBounds(geometry)
             
-            # Check collection size
+            # Check if any images are available for the specified period
             collection_size = viirs.size().getInfo()
             print(f"   📊 Found {collection_size} VIIRS nighttime images")
             
-            # Return empty results if no data
+            # Return default values if no nighttime lights data available
             if collection_size == 0:
                 return self._empty_ntl_results()
             
-            # Get median composite to reduce noise
+            # Create median composite to reduce noise and outliers
             ntl_composite = viirs.select('avg_rad').median()
             
-            # Calculate poverty-relevant statistics
+            # Calculate comprehensive statistical measures for poverty assessment
             stats = ntl_composite.reduceRegion(
                 reducer=ee.Reducer.mean().combine(
                     reducer2=ee.Reducer.median(),
@@ -94,17 +142,18 @@ class EnhancedSatellitePovertyAnalyzer:
                 bestEffort=True
             ).getInfo()
             
-            # Calculate poverty indicators based on literature
+            # Extract statistical measures with null value handling
             ntl_mean = stats.get('avg_rad_mean', 0) or 0
             ntl_median = stats.get('avg_rad_median', 0) or 0
-            ntl_p10 = stats.get('avg_rad_p10', 0) or 0  # Bottom 10% - extreme poverty areas
-            ntl_p25 = stats.get('avg_rad_p25', 0) or 0  # Bottom 25% - poverty areas
+            ntl_p10 = stats.get('avg_rad_p10', 0) or 0
+            ntl_p25 = stats.get('avg_rad_p25', 0) or 0
             
-            # Poverty indicators (higher values = more poverty)
-            electrification_deficit = max(0, 1 - ntl_mean)  # Lack of electrification
-            extreme_poverty_ratio = 1.0 if ntl_p10 < 0.1 else 0.0  # Very dark areas
-            economic_isolation_index = max(0, 1 - ntl_median)  # Economic isolation
+            # Calculate poverty indicators based on established literature
+            electrification_deficit = max(0, 1 - ntl_mean)
+            extreme_poverty_ratio = 1.0 if ntl_p10 < 0.1 else 0.0
+            economic_isolation_index = max(0, 1 - ntl_median)
             
+            # Return comprehensive nighttime lights poverty assessment
             return {
                 'ntl_mean_radiance': ntl_mean,
                 'ntl_median_radiance': ntl_median,
@@ -117,25 +166,31 @@ class EnhancedSatellitePovertyAnalyzer:
             }
             
         except Exception as e:
+            # Handle errors gracefully and return default values
             print(f"   ❌ Error analyzing nighttime lights: {e}")
             return self._empty_ntl_results()
     
     def get_housing_quality_indicators(self, geometry, start_date, end_date):
         """
-        Extract housing quality from Sentinel-2 & SAR data
-        Literature: Duque et al. (2015), Kuffer et al. (2016) - roof materials, building density
-        Poor housing = Higher poverty
+        Extract housing quality indicators from Sentinel-2 optical and Sentinel-1 SAR data
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            start_date (str): Start date for image collection
+            end_date (str): End date for image collection
+            
+        Returns:
+            dict: Dictionary containing housing quality poverty indicators
         """
-        # Print progress message
         print("   🏠 Analyzing housing quality indicators...")
         try:
-            # Sentinel-2 for roof material analysis
+            # Access Sentinel-2 surface reflectance data
             s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
                   .filterDate(start_date, end_date) \
                   .filterBounds(geometry) \
                   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
             
-            # Sentinel-1 SAR for building structure analysis
+            # Access Sentinel-1 SAR data
             s1 = ee.ImageCollection('COPERNICUS/S1_GRD') \
                   .filterDate(start_date, end_date) \
                   .filterBounds(geometry) \
@@ -144,21 +199,16 @@ class EnhancedSatellitePovertyAnalyzer:
             # Initialize results dictionary
             results = {}
             
-            # Process Sentinel-2 data if available
+            # Process Sentinel-2 optical data if available
             if s2.size().getInfo() > 0:
-                # Calculate indices for roof material assessment
                 s2_composite = s2.median()
                 
-                # Metal roof index (higher reflectance in NIR)
+                # Calculate spectral indices for roof material classification
                 metal_roof_index = s2_composite.select('B8').divide(s2_composite.select('B4'))
-                
-                # Concrete/cement roof index 
                 concrete_index = s2_composite.select('B11').divide(s2_composite.select('B8'))
-                
-                # Thatch/organic roof index (higher in red, lower in NIR)
                 organic_roof_index = s2_composite.select('B4').divide(s2_composite.select('B8'))
                 
-                # Calculate statistics
+                # Calculate statistical measures
                 roof_stats = ee.Image([metal_roof_index, concrete_index, organic_roof_index]).reduceRegion(
                     reducer=ee.Reducer.mean().combine(
                         reducer2=ee.Reducer.percentile([25, 75]),
@@ -170,11 +220,11 @@ class EnhancedSatellitePovertyAnalyzer:
                     bestEffort=True
                 ).getInfo()
                 
-                # Poor housing indicators (higher = more poverty)
+                # Extract roof material indicators
                 organic_roof_prevalence = roof_stats.get('B4_mean', 0) or 0
-                poor_roof_materials = max(0, organic_roof_prevalence - 0.5)  # High organic/thatch ratio
+                poor_roof_materials = max(0, organic_roof_prevalence - 0.5)
                 
-                # Update results with roof material indicators
+                # Update results with roof material analysis
                 results.update({
                     'metal_roof_ratio': roof_stats.get('B8_mean', 0) or 0,
                     'concrete_roof_ratio': roof_stats.get('B11_mean', 0) or 0,
@@ -185,16 +235,13 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Process Sentinel-1 SAR data if available
             if s1.size().getInfo() > 0:
-                # SAR analysis for building density and structure
                 s1_composite = s1.select(['VV', 'VH']).median()
                 
-                # Urban density from SAR backscatter
+                # Urban density from SAR backscatter analysis
                 urban_density = s1_composite.select('VV').subtract(s1_composite.select('VH'))
-                
-                # Building structure quality (more regular structures have higher VV/VH ratio)
                 structure_quality = s1_composite.select('VV').divide(s1_composite.select('VH'))
                 
-                # Calculate SAR statistics
+                # Calculate SAR-based structure statistics
                 sar_stats = ee.Image([urban_density, structure_quality]).reduceRegion(
                     reducer=ee.Reducer.mean().combine(
                         reducer2=ee.Reducer.stdDev(),
@@ -206,12 +253,12 @@ class EnhancedSatellitePovertyAnalyzer:
                     bestEffort=True
                 ).getInfo()
                 
-                # Informal settlement indicators
+                # Extract building structure indicators
                 building_density = sar_stats.get('VV_mean', 0) or 0
                 structure_irregularity = sar_stats.get('VV_stdDev', 0) or 0
                 poor_building_quality = max(0, 1 - (sar_stats.get('VV_mean', 0) or 0))
                 
-                # Update results with building indicators
+                # Update results with building structure analysis
                 results.update({
                     'building_density_index': building_density,
                     'structure_irregularity': structure_irregularity,
@@ -227,25 +274,27 @@ class EnhancedSatellitePovertyAnalyzer:
     
     def get_infrastructure_poverty_indicators(self, geometry):
         """
-        Extract infrastructure-based poverty indicators
-        Literature: Watmough et al. (2019) - road access, market access as poverty indicators
-        Poor infrastructure access = Higher poverty
+        Extract infrastructure-based poverty indicators focusing on water access and terrain
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            
+        Returns:
+            dict: Dictionary containing infrastructure poverty indicators
         """
-        # Print progress message
         print("   🛣️ Analyzing infrastructure poverty indicators...")
         try:
-            # Initialize results dictionary
             results = {}
             
-            # Water access analysis using Global Surface Water
+            # Water access analysis using Global Surface Water dataset
             gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
             water_occurrence = gsw.select('occurrence')
             
-            # Distance to reliable water sources (occurrence > 50%)
+            # Identify reliable water sources (>50% occurrence)
             reliable_water = water_occurrence.gt(50)
             water_distance = reliable_water.fastDistanceTransform(5000).sqrt()
             
-            # Calculate water statistics
+            # Calculate water accessibility statistics
             water_stats = water_distance.reduceRegion(
                 reducer=ee.Reducer.mean().combine(
                     reducer2=ee.Reducer.min(),
@@ -257,11 +306,11 @@ class EnhancedSatellitePovertyAnalyzer:
                 bestEffort=True
             ).getInfo()
             
-            # Water poverty indicators
+            # Calculate water poverty indicators
             water_access_deficit = min(1.0, (water_stats.get('distance_mean', 5000) or 5000) / 5000)
             severe_water_shortage = 1.0 if (water_stats.get('distance_min', 5000) or 5000) > 2000 else 0.0
             
-            # Terrain accessibility analysis using SRTM DEM
+            # Terrain accessibility analysis using SRTM elevation data
             dem = ee.Image('USGS/SRTMGL1_003')
             terrain = ee.Algorithms.Terrain(dem)
             slope = terrain.select('slope')
@@ -278,12 +327,12 @@ class EnhancedSatellitePovertyAnalyzer:
                 bestEffort=True
             ).getInfo()
             
-            # Terrain-based isolation index
+            # Calculate terrain-based isolation indicators
             mean_slope = terrain_stats.get('slope_mean', 0) or 0
-            terrain_isolation = min(1.0, mean_slope / 15.0)  # Normalize by 15 degrees
+            terrain_isolation = min(1.0, mean_slope / 15.0)
             geographic_isolation = 1.0 if mean_slope > 10 else 0.0
             
-            # Update results with infrastructure indicators
+            # Compile infrastructure poverty indicators
             results.update({
                 'water_access_deficit': water_access_deficit,
                 'severe_water_shortage': severe_water_shortage,
@@ -301,17 +350,21 @@ class EnhancedSatellitePovertyAnalyzer:
     
     def get_environmental_poverty_indicators(self, geometry, start_date, end_date):
         """
-        Extract environmental poverty indicators
-        Literature: Chakraborty et al. (2017) - environmental quality and poverty correlation
-        Poor environmental conditions = Higher poverty risk
+        Extract environmental poverty indicators from satellite data
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            start_date (str): Start date for image collection
+            end_date (str): End date for image collection
+            
+        Returns:
+            dict: Dictionary containing environmental poverty indicators
         """
-        # Print progress message
         print("   🌱 Analyzing environmental poverty indicators...")
         try:
-            # Initialize results dictionary
             results = {}
             
-            # Vegetation health analysis using Sentinel-2
+            # Vegetation health analysis using Sentinel-2 data
             s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
                   .filterDate(start_date, end_date) \
                   .filterBounds(geometry) \
@@ -319,14 +372,11 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Process Sentinel-2 data if available
             if s2.size().getInfo() > 0:
-                # Create median composite
                 s2_composite = s2.median()
                 
-                # NDVI for vegetation health
+                # Calculate NDVI and bare soil index
                 ndvi = s2_composite.normalizedDifference(['B8', 'B4'])
-                
-                # Environmental degradation indices
-                bare_soil_index = s2_composite.normalizedDifference(['B11', 'B8'])  # NDBI
+                bare_soil_index = s2_composite.normalizedDifference(['B11', 'B8'])
                 
                 # Calculate environmental statistics
                 env_stats = ee.Image([ndvi, bare_soil_index]).reduceRegion(
@@ -340,12 +390,12 @@ class EnhancedSatellitePovertyAnalyzer:
                     bestEffort=True
                 ).getInfo()
                 
-                # Environmental poverty indicators
-                vegetation_deficit = max(0, 0.3 - (env_stats.get('nd_mean', 0) or 0))  # Low NDVI
-                environmental_degradation = max(0, (env_stats.get('nd_1_mean', 0) or 0) - 0.1)  # High bare soil
+                # Calculate environmental poverty indicators
+                vegetation_deficit = max(0, 0.3 - (env_stats.get('nd_mean', 0) or 0))
+                environmental_degradation = max(0, (env_stats.get('nd_1_mean', 0) or 0) - 0.1)
                 green_space_deprivation = 1.0 if (env_stats.get('nd_mean', 0) or 0) < 0.2 else 0.0
                 
-                # Update results with environmental indicators
+                # Update results with vegetation indicators
                 results.update({
                     'vegetation_deficit': vegetation_deficit,
                     'environmental_degradation': environmental_degradation,
@@ -354,17 +404,14 @@ class EnhancedSatellitePovertyAnalyzer:
                     'bare_soil_ratio': env_stats.get('nd_1_mean', 0) or 0
                 })
             
-            # Air quality proxy from Sentinel-5P
+            # Air quality analysis using Sentinel-5P TROPOMI data
             try:
-                # Get NO2 data from Sentinel-5P TROPOMI
                 no2 = ee.ImageCollection('COPERNICUS/S5P/NRTI/L3_NO2') \
                        .filterDate(start_date, end_date) \
                        .filterBounds(geometry) \
                        .select('NO2_column_number_density')
                 
-                # Process NO2 data if available
                 if no2.size().getInfo() > 0:
-                    # Calculate NO2 statistics
                     no2_stats = no2.median().reduceRegion(
                         reducer=ee.Reducer.mean(),
                         geometry=geometry,
@@ -373,16 +420,13 @@ class EnhancedSatellitePovertyAnalyzer:
                         bestEffort=True
                     ).getInfo()
                     
-                    # Air pollution poverty indicator
                     air_pollution_burden = min(1.0, max(0, (no2_stats.get('NO2_column_number_density', 0) or 0) * 1e6))
                     
-                    # Update results with air quality indicators
                     results.update({
                         'air_pollution_burden': air_pollution_burden,
                         'no2_density': no2_stats.get('NO2_column_number_density', 0) or 0
                     })
             except:
-                # Default air quality values if data unavailable
                 results.update({
                     'air_pollution_burden': 0,
                     'no2_density': 0
@@ -396,25 +440,29 @@ class EnhancedSatellitePovertyAnalyzer:
     
     def get_population_poverty_indicators(self, geometry, year=2020):
         """
-        Extract population-based poverty indicators
-        Literature: Steele et al. (2017) - population density patterns and poverty
+        Extract population-based poverty indicators using WorldPop data
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            year (int): Year for population data
+            
+        Returns:
+            dict: Dictionary containing population-based poverty indicators
         """
-        # Print progress message
         print("   👥 Analyzing population poverty indicators...")
         try:
-            # WorldPop population data for India
+            # Access WorldPop population count data for India
             population = ee.ImageCollection('WorldPop/GP/100m/pop') \
                           .filter(ee.Filter.eq('year', year)) \
                           .filter(ee.Filter.eq('country', 'IND'))
             
-            # Return empty results if no population data
             if population.size().getInfo() == 0:
                 return {}
             
-            # Create population mosaic
+            # Create population mosaic for analysis
             pop_image = population.mosaic()
             
-            # Population statistics
+            # Calculate comprehensive population statistics
             pop_stats = pop_image.reduceRegion(
                 reducer=ee.Reducer.sum().combine(
                     reducer2=ee.Reducer.mean(),
@@ -432,20 +480,20 @@ class EnhancedSatellitePovertyAnalyzer:
                 bestEffort=True
             ).getInfo()
             
-            # Calculate area and derived indicators
+            # Calculate area for density computation
             area_km2 = geometry.area().divide(1e6).getInfo()
+            
+            # Extract population measures
             total_pop = pop_stats.get('population_sum', 0) or 0
             pop_density = total_pop / area_km2 if area_km2 > 0 else 0
             
-            # Population poverty indicators
+            # Calculate population inequality indicators
             pop_std = pop_stats.get('population_stdDev', 0) or 0
             pop_mean = pop_stats.get('population_mean', 0) or 0
             
-            # Calculate inequality and overcrowding
-            population_inequality = pop_std / max(pop_mean, 1)  # High inequality may indicate slums
-            overcrowding_index = min(1.0, pop_density / 10000)  # Normalize by 10k people/km²
+            population_inequality = pop_std / max(pop_mean, 1)
+            overcrowding_index = min(1.0, pop_density / 10000)
             
-            # Settlement pattern analysis
             pop_p90 = pop_stats.get('population_p90', 0) or 0
             pop_p10 = pop_stats.get('population_p10', 0) or 0
             settlement_disparity = (pop_p90 - pop_p10) / max(pop_mean, 1)
@@ -465,25 +513,26 @@ class EnhancedSatellitePovertyAnalyzer:
     
     def get_enhanced_access_indicators(self, geometry):
         """
-        Analyze access to hospitals, airports, and markets using road networks
-        Literature: Alegana et al. (2012) - healthcare access; Kwan (2006) - transportation access
+        Analyze access to hospitals, airports, and markets using spatial proximity analysis
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            
+        Returns:
+            dict: Dictionary containing enhanced access poverty indicators
         """
-        # Print progress message
         print("   🏥 Analyzing enhanced access indicators (hospitals, airports, markets)...")
         try:
-            # Initialize results dictionary
             results = {}
             
-            # Try to get OSM healthcare facilities
+            # Healthcare facility access analysis
             try:
-                # Healthcare facilities analysis (using point locations as proxy)
-                # Distance calculation based on region centroid
                 region_centroid = geometry.centroid()
                 
-                # Major cities in India with hospitals (as reference points)
+                # Major cities in India with hospital infrastructure
                 major_cities = [
-                    [77.2090, 28.6139],  # Delhi
-                    [72.8777, 19.0760],  # Mumbai  
+                    [77.2090, 28.6139],  # New Delhi
+                    [72.8777, 19.0760],  # Mumbai
                     [88.3639, 22.5726],  # Kolkata
                     [80.2707, 13.0827],  # Chennai
                     [77.5946, 12.9716],  # Bangalore
@@ -492,22 +541,16 @@ class EnhancedSatellitePovertyAnalyzer:
                     [75.7873, 26.9124]   # Jaipur
                 ]
                 
-                # Calculate distance to nearest major city (proxy for hospital access)
                 min_city_distance = float('inf')
                 for city_coords in major_cities:
-                    # Create city point
                     city_point = ee.Geometry.Point(city_coords)
-                    # Calculate distance to region centroid
                     distance = region_centroid.distance(city_point)
-                    # Update minimum distance
                     distance_km = distance.divide(1000).getInfo()
                     min_city_distance = min(min_city_distance, distance_km)
                 
-                # Healthcare access indicators
                 hospital_access_km = min_city_distance
-                hospital_access_deficit = min(1.0, hospital_access_km / 50.0)  # Normalize by 50km
+                hospital_access_deficit = min(1.0, hospital_access_km / 50.0)
                 
-                # Update results with healthcare access
                 results.update({
                     'distance_to_nearest_major_city_km': hospital_access_km,
                     'hospital_access_deficit': hospital_access_deficit,
@@ -516,7 +559,6 @@ class EnhancedSatellitePovertyAnalyzer:
                 
             except Exception as e:
                 print(f"   ⚠️ Healthcare access calculation issue: {e}")
-                # Default values if calculation fails
                 results.update({
                     'distance_to_nearest_major_city_km': 25.0,
                     'hospital_access_deficit': 0.5,
@@ -525,35 +567,29 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Airport access analysis
             try:
-                # Major airports in India
                 major_airports = [
-                    [77.1025, 28.5562],  # Delhi Airport
-                    [72.8682, 19.0896],  # Mumbai Airport
-                    [88.4467, 22.6542],  # Kolkata Airport
-                    [80.1694, 12.9900],  # Chennai Airport
-                    [77.7081, 13.1986],  # Bangalore Airport
-                    [78.4291, 17.2403],  # Hyderabad Airport
-                    [72.6358, 23.0776],  # Ahmedabad Airport
-                    [75.8121, 26.8244]   # Jaipur Airport
+                    [77.1025, 28.5562],  # Delhi
+                    [72.8682, 19.0896],  # Mumbai
+                    [88.4467, 22.6542],  # Kolkata
+                    [80.1694, 12.9900],  # Chennai
+                    [77.7081, 13.1986],  # Bangalore
+                    [78.4291, 17.2403],  # Hyderabad
+                    [72.6358, 23.0776],  # Ahmedabad
+                    [75.8121, 26.8244]   # Jaipur
                 ]
                 
-                # Calculate distance to nearest airport
                 min_airport_distance = float('inf')
                 region_centroid = geometry.centroid()
                 
                 for airport_coords in major_airports:
-                    # Create airport point
                     airport_point = ee.Geometry.Point(airport_coords)
-                    # Calculate distance
                     distance = region_centroid.distance(airport_point)
                     distance_km = distance.divide(1000).getInfo()
                     min_airport_distance = min(min_airport_distance, distance_km)
                 
-                # Airport access indicators
                 airport_access_km = min_airport_distance
-                airport_access_deficit = min(1.0, airport_access_km / 100.0)  # Normalize by 100km
+                airport_access_deficit = min(1.0, airport_access_km / 100.0)
                 
-                # Update results with airport access
                 results.update({
                     'distance_to_nearest_airport_km': airport_access_km,
                     'airport_access_deficit': airport_access_deficit,
@@ -562,29 +598,22 @@ class EnhancedSatellitePovertyAnalyzer:
                 
             except Exception as e:
                 print(f"   ⚠️ Airport access calculation issue: {e}")
-                # Default values if calculation fails
                 results.update({
                     'distance_to_nearest_airport_km': 50.0,
                     'airport_access_deficit': 0.5,
                     'transportation_isolation': 0.5
                 })
             
-            # Market access analysis (using populated areas as proxy)
+            # Market access analysis using population density
             try:
-                # Use population density as proxy for market access
-                # Areas with higher population typically have better market access
                 population = ee.ImageCollection('WorldPop/GP/100m/pop') \
                               .filter(ee.Filter.eq('year', 2020)) \
                               .filter(ee.Filter.eq('country', 'IND'))
                 
                 if population.size().getInfo() > 0:
-                    # Get population image
                     pop_image = population.mosaic()
+                    larger_area = geometry.buffer(10000)
                     
-                    # Calculate population within larger area (market catchment)
-                    larger_area = geometry.buffer(10000)  # 10km buffer for market analysis
-                    
-                    # Calculate population statistics in larger area
                     market_stats = pop_image.reduceRegion(
                         reducer=ee.Reducer.mean().combine(
                             reducer2=ee.Reducer.sum(),
@@ -596,15 +625,11 @@ class EnhancedSatellitePovertyAnalyzer:
                         bestEffort=True
                     ).getInfo()
                     
-                    # Market access indicators based on surrounding population
                     surrounding_population = market_stats.get('population_sum', 0) or 0
-                    market_access_score = min(1.0, surrounding_population / 50000)  # Normalize by 50k people
+                    market_access_score = min(1.0, surrounding_population / 50000)
                     market_access_deficit = 1 - market_access_score
-                    
-                    # Economic opportunities index
                     economic_opportunities = market_access_score
                     
-                    # Update results with market access
                     results.update({
                         'surrounding_population_10km': surrounding_population,
                         'market_access_score': market_access_score,
@@ -613,7 +638,6 @@ class EnhancedSatellitePovertyAnalyzer:
                     })
                     
                 else:
-                    # Default market access values
                     results.update({
                         'surrounding_population_10km': 25000,
                         'market_access_score': 0.5,
@@ -623,7 +647,6 @@ class EnhancedSatellitePovertyAnalyzer:
                     
             except Exception as e:
                 print(f"   ⚠️ Market access calculation issue: {e}")
-                # Default market access values
                 results.update({
                     'surrounding_population_10km': 25000,
                     'market_access_score': 0.5,
@@ -640,29 +663,30 @@ class EnhancedSatellitePovertyAnalyzer:
     def get_road_quality_indicators(self, geometry, start_date, end_date):
         """
         Analyze road quality using Sentinel-2 spectral characteristics
-        Literature: Engstrom et al. (2020) - road surface material detection
+        
+        Args:
+            geometry: Earth Engine geometry for analysis area
+            start_date (str): Start date for image collection
+            end_date (str): End date for image collection
+            
+        Returns:
+            dict: Dictionary containing road quality poverty indicators
         """
-        # Print progress message
         print("   🛣️ Analyzing road quality indicators...")
         try:
-            # Get Sentinel-2 data
+            # Access Sentinel-2 data for road surface analysis
             s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') \
                   .filterDate(start_date, end_date) \
                   .filterBounds(geometry) \
                   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
             
-            # Return empty results if no data
             if s2.size().getInfo() == 0:
                 return {}
             
-            # Create median composite
             s2_composite = s2.median()
             
-            # Road surface indices
-            # Paved road index (higher SWIR reflectance)
+            # Calculate road surface spectral indices
             paved_road_index = s2_composite.select('B11').divide(s2_composite.select('B4'))
-            
-            # Unpaved road index (higher visible, lower SWIR)
             unpaved_road_index = s2_composite.select('B4').divide(s2_composite.select('B11'))
             
             # Calculate road quality statistics
@@ -677,20 +701,30 @@ class EnhancedSatellitePovertyAnalyzer:
                 bestEffort=True
             ).getInfo()
             
-            # Road quality indicators
+            # Extract road surface indicators
             paved_ratio = road_stats.get('B11_mean', 0) or 0
             unpaved_ratio = road_stats.get('B4_mean', 0) or 0
             
-            # Road quality deficit (higher unpaved ratio = higher poverty)
+            # Calculate road quality deficit indicator
             road_quality_deficit = min(1.0, unpaved_ratio / max(paved_ratio, 0.1))
+            
+            # Road infrastructure score: Inverse of quality deficit
             road_infrastructure_score = 1 - road_quality_deficit
+            
+            # Qualitative road surface assessment
+            if road_quality_deficit < 0.3:
+                road_surface_quality = "Good"
+            elif road_quality_deficit < 0.7:
+                road_surface_quality = "Moderate"
+            else:
+                road_surface_quality = "Poor"
             
             return {
                 'paved_road_index': paved_ratio,
                 'unpaved_road_index': unpaved_ratio,
                 'road_quality_deficit': road_quality_deficit,
                 'road_infrastructure_score': road_infrastructure_score,
-                'road_surface_quality': "Good" if road_quality_deficit < 0.3 else "Moderate" if road_quality_deficit < 0.7 else "Poor"
+                'road_surface_quality': road_surface_quality
             }
             
         except Exception as e:
@@ -700,12 +734,21 @@ class EnhancedSatellitePovertyAnalyzer:
     def calculate_multidimensional_poverty_index(self, results):
         """
         Calculate Multidimensional Poverty Index (MPI) based on satellite indicators
-        Literature: Alkire & Foster (2011), adapted for satellite data
+        
+        Literature Foundation:
+        - Alkire & Foster (2011): "Counting and multidimensional poverty measurement"
+        - Alkire & Santos (2014): "Measuring acute poverty in the developing world"
+        - UNDP (2019): "Global Multidimensional Poverty Index"
+        
+        Args:
+            results (dict): Dictionary containing all poverty indicators
+            
+        Returns:
+            dict: Dictionary containing MPI scores and classifications
         """
-        # Print progress message
         print("   📊 Calculating Multidimensional Poverty Index...")
         
-        # Define poverty dimensions and weights (based on literature)
+        # Define poverty dimensions and weights
         dimensions = {
             'economic_deprivation': {
                 'weight': 0.33,
@@ -739,28 +782,29 @@ class EnhancedSatellitePovertyAnalyzer:
         dimension_scores = {}
         
         for dim_name, dim_config in dimensions.items():
-            # Initialize dimension score
             dim_score = 0
             weight_sum = 0
             
-            # Calculate weighted average of indicators within dimension
             for indicator, weight in dim_config['indicators'].items():
                 if indicator in results and results[indicator] is not None:
                     value = results[indicator]
-                    # Normalize to 0-1 scale where 1 = maximum poverty
                     normalized_value = min(1.0, max(0.0, float(value)))
                     dim_score += weight * normalized_value
                     weight_sum += weight
             
-            # Store dimension score
             dimension_scores[dim_name] = dim_score / weight_sum if weight_sum > 0 else 0
         
         # Calculate overall MPI
         mpi_score = sum(dimension_scores[dim] * dimensions[dim]['weight'] 
                        for dim in dimension_scores)
         
-        # Poverty classification based on MPI score
-        poverty_level = "Low" if mpi_score < 0.33 else "Moderate" if mpi_score < 0.66 else "High"
+        # Classify poverty level
+        if mpi_score < 0.33:
+            poverty_level = "Low"
+        elif mpi_score < 0.66:
+            poverty_level = "Moderate"
+        else:
+            poverty_level = "High"
         
         return {
             'multidimensional_poverty_index': mpi_score,
@@ -768,18 +812,24 @@ class EnhancedSatellitePovertyAnalyzer:
             'economic_deprivation_score': dimension_scores.get('economic_deprivation', 0),
             'living_standards_score': dimension_scores.get('living_standards', 0),
             'environmental_deprivation_score': dimension_scores.get('environmental_deprivation', 0),
-            'poverty_intensity': mpi_score,  # Alias for MPI
+            'poverty_intensity': mpi_score,
             'vulnerable_to_poverty': 1.0 if mpi_score > 0.5 else 0.0
         }
     
     def calculate_enhanced_mpi(self, results):
         """
-        Enhanced MPI including new socioeconomic indicators
+        Enhanced MPI including new socioeconomic indicators for comprehensive assessment
+        
+        Args:
+            results (dict): Dictionary containing all poverty indicators
+            
+        Returns:
+            dict: Dictionary containing enhanced MPI scores and classifications
         """
-        # Get base MPI first
+        # Calculate base MPI first
         base_mpi = self.calculate_multidimensional_poverty_index(results)
         
-        # Enhanced dimensions with new indicators
+        # Define enhanced dimensions
         enhanced_dimensions = {
             'access_deprivation': {
                 'weight': 0.15,
@@ -795,7 +845,7 @@ class EnhancedSatellitePovertyAnalyzer:
                 'indicators': {
                     'healthcare_isolation_index': 0.4,
                     'transportation_isolation': 0.3,
-                    'economic_opportunities_index': 0.3  # Inverted
+                    'economic_opportunities_index': 0.3
                 }
             }
         }
@@ -811,7 +861,7 @@ class EnhancedSatellitePovertyAnalyzer:
                     value = results[indicator]
                     normalized_value = min(1.0, max(0.0, float(value)))
                     
-                    # Invert economic opportunities (higher = better)
+                    # Invert economic opportunities indicator
                     if 'opportunities' in indicator:
                         normalized_value = 1 - normalized_value
                     
@@ -820,7 +870,7 @@ class EnhancedSatellitePovertyAnalyzer:
             
             enhanced_scores[dim_name] = dim_score / weight_sum if weight_sum > 0 else 0
         
-        # Calculate enhanced MPI (adjust base weights to make room for new dimensions)
+        # Calculate enhanced MPI with adjusted weights
         enhanced_mpi = (
             0.25 * base_mpi.get('economic_deprivation_score', 0) +
             0.25 * base_mpi.get('living_standards_score', 0) +
@@ -829,10 +879,15 @@ class EnhancedSatellitePovertyAnalyzer:
             0.10 * enhanced_scores.get('connectivity_isolation', 0)
         )
         
-        # Enhanced poverty classification
-        enhanced_poverty_level = "Low" if enhanced_mpi < 0.33 else "Moderate" if enhanced_mpi < 0.66 else "High"
+        # Enhanced poverty level classification
+        if enhanced_mpi < 0.33:
+            enhanced_poverty_level = "Low"
+        elif enhanced_mpi < 0.66:
+            enhanced_poverty_level = "Moderate"
+        else:
+            enhanced_poverty_level = "High"
         
-        # Add enhanced results to base MPI
+        # Combine results
         base_mpi.update({
             'enhanced_mpi': enhanced_mpi,
             'enhanced_poverty_level': enhanced_poverty_level,
@@ -842,21 +897,161 @@ class EnhancedSatellitePovertyAnalyzer:
         
         return base_mpi
     
+    def generate_poverty_report(self, results):
+        """
+        Generate comprehensive poverty analysis report with enhanced indicators
+        
+        Args:
+            results (dict): Complete poverty analysis results
+            
+        Returns:
+            dict: Same results dictionary (report is printed)
+        """
+        
+        print("\n" + "="*80)
+        print("📋 COMPREHENSIVE ENHANCED POVERTY ANALYSIS REPORT")
+        print("="*80)
+        print(f"📍 Location: ({results['latitude']}, {results['longitude']})")
+        print(f"📏 Analysis Radius: {results['radius_km']} km")
+        print(f"📅 Analysis Period: {results['start_date']} to {results['end_date']}")
+        
+        # Enhanced MPI Summary
+        if 'enhanced_mpi' in results:
+            mpi = results['enhanced_mpi']
+            poverty_level = results.get('enhanced_poverty_level', 'Unknown')
+            
+            print(f"\n🎯 ENHANCED POVERTY ASSESSMENT SUMMARY:")
+            print(f"   📊 Enhanced Multidimensional Poverty Index (MPI): {mpi:.3f}")
+            print(f"   📈 Enhanced Poverty Level: {poverty_level}")
+            print(f"   📊 Original MPI: {results.get('multidimensional_poverty_index', 0):.3f}")
+            print(f"   ⚠️ Vulnerable to Poverty: {'Yes' if results.get('vulnerable_to_poverty', 0) > 0.5 else 'No'}")
+        
+        # Economic Poverty Indicators
+        print(f"\n💰 ECONOMIC POVERTY INDICATORS:")
+        if 'electrification_deficit' in results:
+            print(f"   ⚡ Electrification Deficit: {results['electrification_deficit']:.3f}")
+            print(f"   🌙 Economic Isolation Index: {results.get('economic_isolation_index', 0):.3f}")
+            print(f"   🔴 Extreme Poverty Areas: {results.get('extreme_poverty_ratio', 0):.3f}")
+            print(f"   💡 Mean Nighttime Radiance: {results.get('ntl_mean_radiance', 0):.4f} nW/cm²/sr")
+        
+        # Housing & Living Standards
+        print(f"\n🏠 HOUSING & LIVING STANDARDS:")
+        if 'poor_roof_materials_index' in results:
+            print(f"   🏚️ Poor Roof Materials Index: {results['poor_roof_materials_index']:.3f}")
+            print(f"   🏘️ Informal Settlement Index: {results.get('informal_settlement_index', 0):.3f}")
+            print(f"   🏗️ Building Quality Issues: {'High' if results.get('structure_irregularity', 0) > 0.5 else 'Low'}")
+        
+        # Water & Infrastructure Access
+        print(f"\n💧 WATER & INFRASTRUCTURE ACCESS:")
+        if 'water_access_deficit' in results:
+            print(f"   🚰 Water Access Deficit: {results['water_access_deficit']:.3f}")
+            print(f"   🌊 Severe Water Shortage: {'Yes' if results.get('severe_water_shortage', 0) > 0.5 else 'No'}")
+            print(f"   🛣️ Terrain Isolation: {results.get('terrain_isolation_index', 0):.3f}")
+            print(f"   📏 Distance to Water: {results.get('water_distance_km', 0):.1f} km")
+        
+        # Enhanced Access Indicators
+        print(f"\n🏥 ENHANCED ACCESS INDICATORS:")
+        if 'hospital_access_deficit' in results:
+            print(f"   🏥 Hospital Access Deficit: {results['hospital_access_deficit']:.3f}")
+            print(f"   🏨 Distance to Major City: {results.get('distance_to_nearest_major_city_km', 0):.1f} km")
+            print(f"   ✈️ Airport Access Deficit: {results.get('airport_access_deficit', 0):.3f}")
+            print(f"   ✈️ Distance to Airport: {results.get('distance_to_nearest_airport_km', 0):.1f} km")
+            print(f"   🏪 Market Access Deficit: {results.get('market_access_deficit', 0):.3f}")
+            print(f"   💼 Economic Opportunities: {results.get('economic_opportunities_index', 0):.3f}")
+        
+        # Road Quality Indicators
+        print(f"\n🛣️ ROAD QUALITY INDICATORS:")
+        if 'road_quality_deficit' in results:
+            print(f"   🛣️ Road Quality Deficit: {results['road_quality_deficit']:.3f}")
+            print(f"   🛤️ Road Infrastructure Score: {results.get('road_infrastructure_score', 0):.3f}")
+            print(f"   🚧 Road Surface Quality: {results.get('road_surface_quality', 'Unknown')}")
+            print(f"   📊 Paved Road Index: {results.get('paved_road_index', 0):.3f}")
+        
+        # Environmental Conditions
+        print(f"\n🌍 ENVIRONMENTAL POVERTY INDICATORS:")
+        if 'vegetation_deficit' in results:
+            print(f"   🌱 Vegetation Deficit: {results['vegetation_deficit']:.3f}")
+            print(f"   🏜️ Environmental Degradation: {results.get('environmental_degradation', 0):.3f}")
+            print(f"   🌳 Green Space Deprivation: {'Yes' if results.get('green_space_deprivation', 0) > 0.5 else 'No'}")
+            print(f"   🌫️ Air Pollution Burden: {results.get('air_pollution_burden', 0):.3f}")
+        
+        # Population & Settlement Analysis
+        print(f"\n👥 POPULATION & SETTLEMENT ANALYSIS:")
+        if 'total_population' in results:
+            print(f"   👨‍👩‍👧‍👦 Total Population: {results['total_population']:.0f} people")
+            print(f"   🏘️ Population Density: {results.get('population_density_per_km2', 0):.1f} people/km²")
+            print(f"   📊 Population Inequality: {results.get('population_inequality', 0):.3f}")
+            print(f"   🏠 Overcrowding Index: {results.get('overcrowding_index', 0):.3f}")
+            print(f"   👥 Surrounding Population (10km): {results.get('surrounding_population_10km', 0):.0f}")
+        
+        # Enhanced Dimension Scores
+        if 'access_deprivation_score' in results:
+            print(f"\n📊 ENHANCED POVERTY DIMENSION SCORES:")
+            print(f"   💰 Economic Deprivation: {results.get('economic_deprivation_score', 0):.3f}")
+            print(f"   🏠 Living Standards: {results.get('living_standards_score', 0):.3f}")
+            print(f"   🌍 Environmental Deprivation: {results.get('environmental_deprivation_score', 0):.3f}")
+            print(f"   🔗 Access Deprivation: {results['access_deprivation_score']:.3f}")
+            print(f"   📡 Connectivity Isolation: {results.get('connectivity_isolation_score', 0):.3f}")
+        
+        # Risk Assessment
+        mpi = results.get('enhanced_mpi', results.get('multidimensional_poverty_index', 0))
+        print(f"\n⚠️ POVERTY RISK ASSESSMENT:")
+        if mpi < 0.2:
+            print(f"   ✅ Low Poverty Risk - Well-developed area with good access")
+        elif mpi < 0.4:
+            print(f"   🟡 Moderate Poverty Risk - Some development and access gaps")
+        elif mpi < 0.6:
+            print(f"   🟠 High Poverty Risk - Significant deprivations and poor access")
+        else:
+            print(f"   🔴 Extreme Poverty Risk - Multiple severe deprivations and isolation")
+        
+        # Access Quality Summary
+        print(f"\n🔗 ACCESS QUALITY SUMMARY:")
+        hospital_access = 1 - results.get('hospital_access_deficit', 0.5)
+        airport_access = 1 - results.get('airport_access_deficit', 0.5)
+        market_access = results.get('market_access_score', 0.5)
+        road_quality = results.get('road_infrastructure_score', 0.5)
+        
+        print(f"   🏥 Healthcare Access Quality: {'Good' if hospital_access > 0.7 else 'Moderate' if hospital_access > 0.4 else 'Poor'}")
+        print(f"   ✈️ Transportation Access: {'Good' if airport_access > 0.7 else 'Moderate' if airport_access > 0.4 else 'Poor'}")
+        print(f"   🏪 Market Access: {'Good' if market_access > 0.7 else 'Moderate' if market_access > 0.4 else 'Poor'}")
+        print(f"   🛣️ Road Infrastructure: {'Good' if road_quality > 0.7 else 'Moderate' if road_quality > 0.4 else 'Poor'}")
+        
+        # Data Quality Assessment
+        print(f"\n📈 DATA QUALITY & SOURCES:")
+        print(f"   🛰️ Satellite Data Sources: {len(results.get('data_sources', []))}")
+        total_indicators = len([k for k in results.keys() if k not in ['latitude', 'longitude', 'radius_km', 'analysis_date', 'start_date', 'end_date', 'data_sources']])
+        print(f"   📊 Total Indicators Extracted: {total_indicators}")
+        print(f"   📅 Analysis Completed: {results.get('analysis_date', 'Unknown')}")
+        
+        print("="*80)
+        
+        return results
+    
     def analyze_poverty_conditions(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
         """
         Comprehensive poverty analysis using satellite data with enhanced indicators
+        
+        Args:
+            lat (float): Latitude of analysis location
+            lon (float): Longitude of analysis location
+            radius_km (float): Analysis radius in kilometers
+            start_date (str): Start date for temporal analysis
+            end_date (str): End date for temporal analysis
+            
+        Returns:
+            dict: Comprehensive poverty analysis results
         """
-        # Print analysis header
         print(f"\n🔍 COMPREHENSIVE ENHANCED POVERTY ANALYSIS")
         print(f"📍 Location: ({lat:.4f}, {lon:.4f})")
         print(f"📏 Analysis Radius: {radius_km} km")
         print(f"📅 Analysis Period: {start_date} to {end_date}")
         print(f"🛰️ Using real satellite data for poverty measurement...")
         
-        # Create geometry
+        # Create spatial geometry for analysis area
         geometry = self.create_buffer_zone(lat, lon, radius_km)
         
-        # Initialize results
+        # Initialize comprehensive results dictionary
         results = {
             'latitude': lat,
             'longitude': lon,
@@ -870,7 +1065,7 @@ class EnhancedSatellitePovertyAnalyzer:
         print(f"\n📡 EXTRACTING POVERTY INDICATORS:")
         print("="*50)
         
-        # 1. Economic poverty from nighttime lights
+        # 1. Economic poverty analysis from nighttime lights
         try:
             ntl_poverty = self.get_poverty_from_nighttime_lights(geometry, start_date, end_date)
             results.update(ntl_poverty)
@@ -910,7 +1105,7 @@ class EnhancedSatellitePovertyAnalyzer:
         except Exception as e:
             print(f"   ❌ Population poverty analysis failed: {e}")
         
-        # 6. Enhanced access indicators (NEW)
+        # 6. Enhanced access indicators
         try:
             access_poverty = self.get_enhanced_access_indicators(geometry)
             results.update(access_poverty)
@@ -918,7 +1113,7 @@ class EnhancedSatellitePovertyAnalyzer:
         except Exception as e:
             print(f"   ❌ Enhanced access analysis failed: {e}")
         
-        # 7. Road quality indicators (NEW)
+        # 7. Road quality indicators
         try:
             road_poverty = self.get_road_quality_indicators(geometry, start_date, end_date)
             results.update(road_poverty)
@@ -938,135 +1133,14 @@ class EnhancedSatellitePovertyAnalyzer:
         
         return results
     
-    def generate_poverty_report(self, results):
-        """Generate comprehensive poverty analysis report with enhanced indicators"""
-        
-        print("\n" + "="*80)
-        print("📋 COMPREHENSIVE ENHANCED POVERTY ANALYSIS REPORT")
-        print("="*80)
-        print(f"📍 Location: ({results['latitude']}, {results['longitude']})")
-        print(f"📏 Analysis Radius: {results['radius_km']} km")
-        print(f"📅 Analysis Period: {results['start_date']} to {results['end_date']}")
-        
-        # Enhanced Multidimensional Poverty Index Summary
-        if 'enhanced_mpi' in results:
-            mpi = results['enhanced_mpi']
-            poverty_level = results.get('enhanced_poverty_level', 'Unknown')
-            
-            print(f"\n🎯 ENHANCED POVERTY ASSESSMENT SUMMARY:")
-            print(f"   📊 Enhanced Multidimensional Poverty Index (MPI): {mpi:.3f}")
-            print(f"   📈 Enhanced Poverty Level: {poverty_level}")
-            print(f"   📊 Original MPI: {results.get('multidimensional_poverty_index', 0):.3f}")
-            print(f"   ⚠️ Vulnerable to Poverty: {'Yes' if results.get('vulnerable_to_poverty', 0) > 0.5 else 'No'}")
-        
-        # Economic Poverty Indicators
-        print(f"\n💰 ECONOMIC POVERTY INDICATORS:")
-        if 'electrification_deficit' in results:
-            print(f"   ⚡ Electrification Deficit: {results['electrification_deficit']:.3f}")
-            print(f"   🌙 Economic Isolation Index: {results.get('economic_isolation_index', 0):.3f}")
-            print(f"   🔴 Extreme Poverty Areas: {results.get('extreme_poverty_ratio', 0):.3f}")
-            print(f"   💡 Mean Nighttime Radiance: {results.get('ntl_mean_radiance', 0):.4f} nW/cm²/sr")
-        
-        # Housing & Living Standards
-        print(f"\n🏠 HOUSING & LIVING STANDARDS:")
-        if 'poor_roof_materials_index' in results:
-            print(f"   🏚️ Poor Roof Materials Index: {results['poor_roof_materials_index']:.3f}")
-            print(f"   🏘️ Informal Settlement Index: {results.get('informal_settlement_index', 0):.3f}")
-            print(f"   🏗️ Building Quality Issues: {'High' if results.get('structure_irregularity', 0) > 0.5 else 'Low'}")
-        
-        # Water & Infrastructure Access  
-        print(f"\n💧 WATER & INFRASTRUCTURE ACCESS:")
-        if 'water_access_deficit' in results:
-            print(f"   🚰 Water Access Deficit: {results['water_access_deficit']:.3f}")
-            print(f"   🌊 Severe Water Shortage: {'Yes' if results.get('severe_water_shortage', 0) > 0.5 else 'No'}")
-            print(f"   🛣️ Terrain Isolation: {results.get('terrain_isolation_index', 0):.3f}")
-            print(f"   📏 Distance to Water: {results.get('water_distance_km', 0):.1f} km")
-        
-        # Enhanced Access Indicators (NEW)
-        print(f"\n🏥 ENHANCED ACCESS INDICATORS:")
-        if 'hospital_access_deficit' in results:
-            print(f"   🏥 Hospital Access Deficit: {results['hospital_access_deficit']:.3f}")
-            print(f"   🏨 Distance to Major City: {results.get('distance_to_nearest_major_city_km', 0):.1f} km")
-            print(f"   ✈️ Airport Access Deficit: {results.get('airport_access_deficit', 0):.3f}")
-            print(f"   ✈️ Distance to Airport: {results.get('distance_to_nearest_airport_km', 0):.1f} km")
-            print(f"   🏪 Market Access Deficit: {results.get('market_access_deficit', 0):.3f}")
-            print(f"   💼 Economic Opportunities: {results.get('economic_opportunities_index', 0):.3f}")
-        
-        # Road Quality Indicators (NEW)
-        print(f"\n🛣️ ROAD QUALITY INDICATORS:")
-        if 'road_quality_deficit' in results:
-            print(f"   🛣️ Road Quality Deficit: {results['road_quality_deficit']:.3f}")
-            print(f"   🛤️ Road Infrastructure Score: {results.get('road_infrastructure_score', 0):.3f}")
-            print(f"   🚧 Road Surface Quality: {results.get('road_surface_quality', 'Unknown')}")
-            print(f"   📊 Paved Road Index: {results.get('paved_road_index', 0):.3f}")
-        
-        # Environmental Conditions
-        print(f"\n🌍 ENVIRONMENTAL POVERTY INDICATORS:")
-        if 'vegetation_deficit' in results:
-            print(f"   🌱 Vegetation Deficit: {results['vegetation_deficit']:.3f}")
-            print(f"   🏜️ Environmental Degradation: {results.get('environmental_degradation', 0):.3f}")
-            print(f"   🌳 Green Space Deprivation: {'Yes' if results.get('green_space_deprivation', 0) > 0.5 else 'No'}")
-            print(f"   🌫️ Air Pollution Burden: {results.get('air_pollution_burden', 0):.3f}")
-        
-        # Population & Settlement Patterns
-        print(f"\n👥 POPULATION & SETTLEMENT ANALYSIS:")
-        if 'total_population' in results:
-            print(f"   👨‍👩‍👧‍👦 Total Population: {results['total_population']:.0f} people")
-            print(f"   🏘️ Population Density: {results.get('population_density_per_km2', 0):.1f} people/km²")
-            print(f"   📊 Population Inequality: {results.get('population_inequality', 0):.3f}")
-            print(f"   🏠 Overcrowding Index: {results.get('overcrowding_index', 0):.3f}")
-            print(f"   👥 Surrounding Population (10km): {results.get('surrounding_population_10km', 0):.0f}")
-        
-        # Enhanced Dimension Scores (NEW)
-        if 'access_deprivation_score' in results:
-            print(f"\n📊 ENHANCED POVERTY DIMENSION SCORES:")
-            print(f"   💰 Economic Deprivation: {results.get('economic_deprivation_score', 0):.3f}")
-            print(f"   🏠 Living Standards: {results.get('living_standards_score', 0):.3f}")
-            print(f"   🌍 Environmental Deprivation: {results.get('environmental_deprivation_score', 0):.3f}")
-            print(f"   🔗 Access Deprivation: {results['access_deprivation_score']:.3f}")
-            print(f"   📡 Connectivity Isolation: {results.get('connectivity_isolation_score', 0):.3f}")
-        
-        # Risk Assessment
-        mpi = results.get('enhanced_mpi', results.get('multidimensional_poverty_index', 0))
-        print(f"\n⚠️ POVERTY RISK ASSESSMENT:")
-        if mpi < 0.2:
-            print(f"   ✅ Low Poverty Risk - Well-developed area with good access")
-        elif mpi < 0.4:
-            print(f"   🟡 Moderate Poverty Risk - Some development and access gaps")
-        elif mpi < 0.6:
-            print(f"   🟠 High Poverty Risk - Significant deprivations and poor access")
-        else:
-            print(f"   🔴 Extreme Poverty Risk - Multiple severe deprivations and isolation")
-        
-        # Access Quality Summary (NEW)
-        print(f"\n🔗 ACCESS QUALITY SUMMARY:")
-        hospital_access = 1 - results.get('hospital_access_deficit', 0.5)
-        airport_access = 1 - results.get('airport_access_deficit', 0.5)
-        market_access = results.get('market_access_score', 0.5)
-        road_quality = results.get('road_infrastructure_score', 0.5)
-        
-        print(f"   🏥 Healthcare Access Quality: {'Good' if hospital_access > 0.7 else 'Moderate' if hospital_access > 0.4 else 'Poor'}")
-        print(f"   ✈️ Transportation Access: {'Good' if airport_access > 0.7 else 'Moderate' if airport_access > 0.4 else 'Poor'}")
-        print(f"   🏪 Market Access: {'Good' if market_access > 0.7 else 'Moderate' if market_access > 0.4 else 'Poor'}")
-        print(f"   🛣️ Road Infrastructure: {'Good' if road_quality > 0.7 else 'Moderate' if road_quality > 0.4 else 'Poor'}")
-        
-        # Data Quality Assessment
-        print(f"\n📈 DATA QUALITY & SOURCES:")
-        print(f"   🛰️ Satellite Data Sources: {len(results.get('data_sources', []))}")
-        total_indicators = len([k for k in results.keys() if k not in ['latitude', 'longitude', 'radius_km', 'analysis_date', 'start_date', 'end_date', 'data_sources']])
-        print(f"   📊 Total Indicators Extracted: {total_indicators}")
-        print(f"   📅 Analysis Completed: {results.get('analysis_date', 'Unknown')}")
-        
-        print("="*80)
-        
-        return results
-    
     def _empty_ntl_results(self):
-        """Return empty nighttime lights results"""
+        """
+        Return empty nighttime lights results with appropriate default values
+        """
         return {
             'ntl_mean_radiance': 0,
             'ntl_median_radiance': 0,
-            'electrification_deficit': 1.0,  # Assume high deficit if no data
+            'electrification_deficit': 1.0,
             'extreme_poverty_ratio': 1.0,
             'economic_isolation_index': 1.0,
             'dark_area_percentage': True,
@@ -1076,7 +1150,16 @@ class EnhancedSatellitePovertyAnalyzer:
 
 # Additional utility functions for enhanced socioeconomic analysis
 def compare_poverty_levels(analyzer, locations):
-    """Compare poverty levels across multiple locations with enhanced indicators"""
+    """
+    Compare poverty levels across multiple locations with enhanced indicators
+    
+    Args:
+        analyzer: EnhancedSatellitePovertyAnalyzer instance
+        locations: List of location dictionaries with analysis parameters
+        
+    Returns:
+        list: List of analysis results for all locations
+    """
     print("🔍 ENHANCED COMPARATIVE POVERTY ANALYSIS")
     print("="*60)
     
@@ -1084,20 +1167,30 @@ def compare_poverty_levels(analyzer, locations):
     
     for location in locations:
         print(f"\n📍 Analyzing: {location['name']}")
-        results = analyzer.analyze_poverty_conditions(**{k: v for k, v in location.items() if k != 'name'})
+        
+        # Extract analysis parameters (excluding location name)
+        analysis_params = {k: v for k, v in location.items() if k != 'name'}
+        
+        # Perform comprehensive poverty analysis for location
+        results = analyzer.analyze_poverty_conditions(**analysis_params)
+        
+        # Add location identifier to results
         results['location_name'] = location['name']
+        
+        # Store results for comparison
         all_results.append(results)
     
-    # Compare Enhanced MPI scores
+    # Generate comparative summary table
     print(f"\n📊 ENHANCED POVERTY COMPARISON SUMMARY:")
     print(f"{'Location':<25} {'Enhanced MPI':<15} {'Poverty Level':<15} {'Access Quality':<15} {'Risk Level'}")
     print("-" * 90)
     
+    # Sort locations by Enhanced MPI score (highest poverty first)
     for result in sorted(all_results, key=lambda x: x.get('enhanced_mpi', x.get('multidimensional_poverty_index', 0)), reverse=True):
         enhanced_mpi = result.get('enhanced_mpi', result.get('multidimensional_poverty_index', 0))
         poverty_level = result.get('enhanced_poverty_level', result.get('poverty_level_classification', 'Unknown'))
         
-        # Calculate access quality score
+        # Calculate composite access quality score
         hospital_access = 1 - result.get('hospital_access_deficit', 0.5)
         market_access = result.get('market_access_score', 0.5)
         road_quality = result.get('road_infrastructure_score', 0.5)
@@ -1111,11 +1204,20 @@ def compare_poverty_levels(analyzer, locations):
     return all_results
 
 def create_enhanced_poverty_dataset(results_list, output_file='enhanced_poverty_dataset.csv'):
-    """Create a comprehensive dataset from multiple enhanced poverty analyses"""
+    """
+    Create a comprehensive dataset from multiple enhanced poverty analyses
+    
+    Args:
+        results_list: List of poverty analysis results from multiple locations
+        output_file: Filename for CSV output dataset
+        
+    Returns:
+        pandas.DataFrame: Structured poverty indicators dataset
+    """
     
     # Define comprehensive poverty indicators to extract
     poverty_indicators = [
-        # Location and basic info
+        # Location and basic information
         'latitude', 'longitude', 'radius_km',
         
         # Enhanced MPI indicators
@@ -1130,37 +1232,37 @@ def create_enhanced_poverty_dataset(results_list, output_file='enhanced_poverty_
         'population_density_per_km2', 'overcrowding_index',
         'economic_deprivation_score', 'living_standards_score', 'environmental_deprivation_score',
         
-        # Enhanced access indicators (NEW)
+        # Enhanced access indicators
         'hospital_access_deficit', 'distance_to_nearest_major_city_km',
         'airport_access_deficit', 'distance_to_nearest_airport_km',
         'market_access_deficit', 'market_access_score', 'economic_opportunities_index',
         'surrounding_population_10km',
         
-        # Road quality indicators (NEW)
+        # Road quality indicators
         'road_quality_deficit', 'road_infrastructure_score', 'road_surface_quality',
         'paved_road_index', 'unpaved_road_index',
         
-        # Enhanced dimension scores (NEW)
+        # Enhanced dimension scores
         'access_deprivation_score', 'connectivity_isolation_score',
         
         # Isolation indices
         'healthcare_isolation_index', 'transportation_isolation'
     ]
     
-    # Extract data for each location
+    # Extract indicator data for each analyzed location
     dataset = []
     for results in results_list:
         row = {}
+        
         for indicator in poverty_indicators:
             row[indicator] = results.get(indicator, None)
         
-        # Add location name if available
         if 'location_name' in results:
             row['location_name'] = results['location_name']
             
         dataset.append(row)
     
-    # Create DataFrame and save
+    # Create structured DataFrame and export to CSV
     df = pd.DataFrame(dataset)
     df.to_csv(output_file, index=False)
     
@@ -1170,12 +1272,132 @@ def create_enhanced_poverty_dataset(results_list, output_file='enhanced_poverty_
     
     return df
 
-# Testing functions for enhanced poverty analysis
+def analyze_comprehensive_indian_locations():
+    """
+    Analyze poverty conditions across a comprehensive set of Indian locations
+    
+    Returns:
+        tuple: (analysis_results, dataset_dataframe)
+    """
+    print("🚀 COMPREHENSIVE INDIAN POVERTY ANALYSIS")
+    print("="*70)
+    print("🌟 Analyzing 50+ locations across India with enhanced satellite indicators")
+    
+    # Initialize enhanced analyzer
+    analyzer = EnhancedSatellitePovertyAnalyzer()
+    
+    # Define comprehensive set of Indian locations for analysis
+    comprehensive_locations = [
+        # Major Metropolitan Areas
+        {"name": "Delhi Central", "lat": 28.6139, "lon": 77.2090, "radius_km": 5},
+        {"name": "Mumbai Business District", "lat": 19.0760, "lon": 72.8777, "radius_km": 4},
+        {"name": "Bangalore IT Hub", "lat": 12.9716, "lon": 77.5946, "radius_km": 4},
+        {"name": "Chennai Industrial", "lat": 13.0827, "lon": 80.2707, "radius_km": 4},
+        {"name": "Kolkata Commercial", "lat": 22.5726, "lon": 88.3639, "radius_km": 4},
+        {"name": "Hyderabad Tech City", "lat": 17.3850, "lon": 78.4867, "radius_km": 4},
+        {"name": "Pune Metropolitan", "lat": 18.5204, "lon": 73.8567, "radius_km": 4},
+        {"name": "Ahmedabad Urban", "lat": 23.0225, "lon": 72.5714, "radius_km": 4},
+        
+        # State Capitals
+        {"name": "Jaipur", "lat": 26.9124, "lon": 75.7873, "radius_km": 4},
+        {"name": "Lucknow", "lat": 26.8467, "lon": 80.9462, "radius_km": 4},
+        {"name": "Bhopal", "lat": 23.2599, "lon": 77.4126, "radius_km": 4},
+        {"name": "Thiruvananthapuram", "lat": 8.5241, "lon": 76.9366, "radius_km": 4},
+        {"name": "Gandhinagar", "lat": 23.2156, "lon": 72.6369, "radius_km": 4},
+        {"name": "Raipur", "lat": 21.2514, "lon": 81.6296, "radius_km": 4},
+        {"name": "Bhubaneswar", "lat": 20.2961, "lon": 85.8245, "radius_km": 4},
+        {"name": "Ranchi", "lat": 23.3441, "lon": 85.3096, "radius_km": 4},
+        
+        # Tier-2 Cities
+        {"name": "Indore", "lat": 22.7196, "lon": 75.8577, "radius_km": 4},
+        {"name": "Kanpur", "lat": 26.4499, "lon": 80.3319, "radius_km": 4},
+        {"name": "Nagpur", "lat": 21.1458, "lon": 79.0882, "radius_km": 4},
+        {"name": "Visakhapatnam", "lat": 17.6868, "lon": 83.2185, "radius_km": 4},
+        {"name": "Agra", "lat": 27.1767, "lon": 78.0081, "radius_km": 4},
+        {"name": "Vadodara", "lat": 22.3072, "lon": 73.1812, "radius_km": 4},
+        {"name": "Coimbatore", "lat": 11.0168, "lon": 76.9558, "radius_km": 4},
+        {"name": "Kochi", "lat": 9.9312, "lon": 76.2673, "radius_km": 4},
+        
+        # Rural and Semi-Urban Areas
+        {"name": "Rural Bihar (Gaya)", "lat": 24.7914, "lon": 85.0002, "radius_km": 6},
+        {"name": "Rural Odisha (Kalahandi)", "lat": 20.1034, "lon": 83.1294, "radius_km": 6},
+        {"name": "Rural UP (Sitapur)", "lat": 27.5672, "lon": 80.6790, "radius_km": 6},
+        {"name": "Rural Rajasthan (Barmer)", "lat": 25.7521, "lon": 71.3961, "radius_km": 6},
+        {"name": "Rural Madhya Pradesh (Shivpuri)", "lat": 25.4227, "lon": 77.6595, "radius_km": 6},
+        {"name": "Rural Jharkhand (Dumka)", "lat": 24.2676, "lon": 87.2456, "radius_km": 6},
+        {"name": "Rural Chhattisgarh (Bastar)", "lat": 19.3158, "lon": 81.9615, "radius_km": 6},
+        {"name": "Rural West Bengal (Purulia)", "lat": 23.3311, "lon": 86.3641, "radius_km": 6},
+        
+        # Tribal and Remote Areas
+        {"name": "Tribal Jharkhand (Khunti)", "lat": 23.0702, "lon": 85.2789, "radius_km": 7},
+        {"name": "Tribal Odisha (Rayagada)", "lat": 19.1689, "lon": 83.4154, "radius_km": 7},
+        {"name": "Tribal Madhya Pradesh (Jhabua)", "lat": 22.7678, "lon": 74.5937, "radius_km": 7},
+        {"name": "Tribal Chhattisgarh (Dantewada)", "lat": 18.8933, "lon": 81.3544, "radius_km": 7},
+        {"name": "Northeast Remote (Mokokchung)", "lat": 26.3225, "lon": 94.5225, "radius_km": 6},
+        {"name": "Northeast Hills (Churachandpur)", "lat": 24.3332, "lon": 93.6793, "radius_km": 6},
+        
+        # Mountain and Border Areas
+        {"name": "Himachal Remote (Kinnaur)", "lat": 31.5898, "lon": 78.2315, "radius_km": 8},
+        {"name": "Uttarakhand Hills (Pithoragarh)", "lat": 29.5836, "lon": 80.2075, "radius_km": 7},
+        {"name": "J&K Remote (Kargil)", "lat": 34.5539, "lon": 76.1249, "radius_km": 8},
+        {"name": "Arunachal Remote (Tawang)", "lat": 27.5865, "lon": 91.8660, "radius_km": 7},
+        
+        # Coastal and Island Areas
+        {"name": "Coastal Odisha (Puri)", "lat": 19.8135, "lon": 85.8312, "radius_km": 5},
+        {"name": "Coastal Andhra (Vijayanagaram)", "lat": 18.1124, "lon": 83.3953, "radius_km": 5},
+        {"name": "Coastal Kerala (Alappuzha)", "lat": 9.4981, "lon": 76.3388, "radius_km": 5},
+        {"name": "Coastal Gujarat (Bharuch)", "lat": 21.7051, "lon": 72.9959, "radius_km": 5},
+        {"name": "Coastal Karnataka (Udupi)", "lat": 13.3409, "lon": 74.7421, "radius_km": 5},
+        
+        # Industrial Areas
+        {"name": "Industrial Haryana (Gurgaon)", "lat": 28.4595, "lon": 77.0266, "radius_km": 4},
+        {"name": "Industrial Tamil Nadu (Tirupur)", "lat": 11.1085, "lon": 77.3411, "radius_km": 4},
+        {"name": "Industrial Gujarat (Ankleshwar)", "lat": 21.6279, "lon": 73.0143, "radius_km": 4},
+        {"name": "Industrial Maharashtra (Aurangabad)", "lat": 19.8762, "lon": 75.3433, "radius_km": 4},
+        {"name": "Industrial Punjab (Ludhiana)", "lat": 30.9010, "lon": 75.8573, "radius_km": 4},
+        
+        # Agricultural Regions
+        {"name": "Agricultural Punjab (Amritsar)", "lat": 31.6340, "lon": 74.8723, "radius_km": 5},
+        {"name": "Agricultural Haryana (Karnal)", "lat": 29.6857, "lon": 76.9905, "radius_km": 5},
+        {"name": "Agricultural Maharashtra (Sangli)", "lat": 16.8524, "lon": 74.5815, "radius_km": 5},
+        {"name": "Agricultural AP (Guntur)", "lat": 16.3067, "lon": 80.4365, "radius_km": 5}
+    ]
+    
+    # Run comprehensive comparative analysis across all locations
+    print(f"\n🔍 Initiating analysis of {len(comprehensive_locations)} diverse locations...")
+    results = compare_poverty_levels(analyzer, comprehensive_locations)
+    
+    # Create comprehensive research dataset
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    dataset_filename = f"comprehensive_india_poverty_analysis_{timestamp}.csv"
+    dataset = create_enhanced_poverty_dataset(results, dataset_filename)
+    
+    # Save detailed results as JSON for complete data preservation
+    json_filename = f"comprehensive_india_poverty_results_{timestamp}.json"
+    with open(json_filename, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    
+    # Print comprehensive analysis summary
+    print(f"\n🎯 COMPREHENSIVE ANALYSIS COMPLETE!")
+    print(f"📊 Locations Analyzed: {len(results)}")
+    print(f"📈 Total Indicators per Location: {len(dataset.columns) if not dataset.empty else 0}")
+    print(f"💾 Results saved to: {json_filename}")
+    print(f"📁 Dataset saved to: {dataset_filename}")
+    print(f"🔬 Ready for advanced poverty research and policy analysis!")
+    
+    return results, dataset
+
 def test_enhanced_poverty_analysis():
-    """Test enhanced poverty analysis with known locations"""
+    """
+    Test enhanced poverty analysis with known diverse locations
+    
+    Returns:
+        tuple: (analysis_results, dataset_dataframe)
+    """
     print("🧪 TESTING ENHANCED SATELLITE-BASED POVERTY ANALYSIS")
     print("="*70)
     
+    # Initialize analyzer
     analyzer = EnhancedSatellitePovertyAnalyzer()
     
     # Test locations representing different poverty and access levels
@@ -1196,43 +1418,52 @@ def test_enhanced_poverty_analysis():
         {"name": "Remote Mountain Area", "lat": 30.7333, "lon": 79.0667, "radius_km": 5}
     ]
     
-    # Analyze each location
+    # Analyze each test location
     results = compare_poverty_levels(analyzer, test_locations)
     
-    # Create enhanced research dataset
+    # Create test dataset
     dataset = create_enhanced_poverty_dataset(results)
     
     return results, dataset
 
-# Main execution
+# Main execution function
 if __name__ == "__main__":
     print("🚀 ENHANCED SATELLITE-BASED POVERTY ANALYSIS SYSTEM")
     print("="*70)
     print("🌟 Now including hospital, airport, market access and road quality indicators")
+    print("📚 Literature-backed implementation with comprehensive Indian coverage")
     
-    # Initialize enhanced analyzer
+    # Option 1: Run comprehensive analysis (50+ locations)
+    print("\n🔄 ANALYSIS OPTIONS:")
+    print("1. Comprehensive Analysis (50+ locations across India)")
+    print("2. Test Analysis (5 diverse test locations)")
+    
+    # For automatic execution, run comprehensive analysis
+    print("\n🚀 Running COMPREHENSIVE ANALYSIS...")
+    
+    # Execute comprehensive Indian poverty analysis
+    results, dataset = analyze_comprehensive_indian_locations()
+    
+    # Print final summary with research implications
+    print(f"\n🎓 RESEARCH IMPACT SUMMARY:")
+    print(f"📈 This analysis provides unprecedented spatial coverage of poverty in India")
+    print(f"🛰️ Novel integration of access and connectivity indicators with traditional poverty measures")
+    print(f"📊 Dataset ready for machine learning, policy analysis, and academic research")
+    
+    # Generate individual location reports for top 5 most impoverished areas
+    print(f"\n📋 GENERATING DETAILED REPORTS FOR HIGH-POVERTY LOCATIONS:")
+    print("="*70)
+    
+    # Sort results by Enhanced MPI (highest poverty first) and take top 5
+    sorted_results = sorted(results, key=lambda x: x.get('enhanced_mpi', x.get('multidimensional_poverty_index', 0)), reverse=True)
+    top_poverty_locations = sorted_results[:5]
+    
+    # Generate detailed reports for highest poverty locations
     analyzer = EnhancedSatellitePovertyAnalyzer()
+    for i, location_result in enumerate(top_poverty_locations, 1):
+        print(f"\n🏆 RANK {i}: DETAILED POVERTY ANALYSIS")
+        analyzer.generate_poverty_report(location_result)
+        print("\n" + "="*80)
     
-    # Define test locations for comparison
-    test_locations = [
-        {"name": "Bardhaman", "lat": 23.75263611, "lon": 87.21012500, "radius_km": 4},
-        {"name": "Darjeeling", "lat": 27.04170278, "lon": 88.26640556, "radius_km": 4}
-    ]
-    
-     # Run enhanced comparative analysis
-    print("\n🔍 Running enhanced poverty analysis with access indicators...")
-    results = compare_poverty_levels(analyzer, test_locations)
-    
-    # Save results with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = f"enhanced_poverty_analysis_{timestamp}.json"
-    
-    with open(output_file, 'w') as f:
-        json.dump(results, f, indent=2, default=str)
-    
-    print(f"\n💾 Results saved to: {output_file}")
-    
-    # Create enhanced dataset
-    dataset = create_enhanced_poverty_dataset(results, f"enhanced_poverty_dataset_{timestamp}.csv")
-    
-    print(f"📊 Enhanced analysis complete! Dataset has {len(dataset)} locations with {len(dataset.columns)} indicators.")
+    print(f"\n✅ COMPREHENSIVE ENHANCED POVERTY ANALYSIS COMPLETE!")
+    print(f"📄 Ready to paste results into AI for comprehensive report generation!")

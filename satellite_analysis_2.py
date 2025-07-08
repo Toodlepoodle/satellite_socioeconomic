@@ -14,6 +14,7 @@ class EnhancedSatellitePovertyAnalyzer:
     """
     Enhanced poverty analysis with additional socioeconomic indicators
     Built on working SatellitePovertyAnalyzer base class
+    Now includes individual measure inspection capabilities
     """
     
     def __init__(self, project_id='ed-sayandasgupta97'):
@@ -48,12 +49,21 @@ class EnhancedSatellitePovertyAnalyzer:
         buffer = point.buffer(radius_km * 1000)
         return buffer
     
-    def get_poverty_from_nighttime_lights(self, geometry, start_date, end_date):
+    def get_poverty_from_nighttime_lights(self, geometry, start_date, end_date, detailed_output=False):
         """
         Extract poverty indicators from VIIRS nighttime lights
         Literature: Elvidge et al. (2009), Jean et al. (2016) - NTL as GDP/wealth proxy
         Low nighttime lights = Lower economic activity = Higher poverty risk
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🌙 DETAILED NIGHTTIME LIGHTS POVERTY ANALYSIS")
+            print("="*60)
+            print("📚 Method: Using VIIRS Day/Night Band for economic activity assessment")
+            print("📊 Logic: Low nighttime luminosity indicates limited electrification and economic activity")
+        
         # Print progress message
         print("   🌙 Analyzing nighttime lights for economic poverty indicators...")
         try:
@@ -66,8 +76,14 @@ class EnhancedSatellitePovertyAnalyzer:
             collection_size = viirs.size().getInfo()
             print(f"   📊 Found {collection_size} VIIRS nighttime images")
             
+            if detailed_output:
+                print(f"   📅 Date range: {start_date} to {end_date}")
+                print(f"   🛰️ VIIRS collection size: {collection_size} images")
+            
             # Return empty results if no data
             if collection_size == 0:
+                if detailed_output:
+                    print("   ⚠️ No VIIRS data available - using default high poverty indicators")
                 return self._empty_ntl_results()
             
             # Get median composite to reduce noise
@@ -100,12 +116,33 @@ class EnhancedSatellitePovertyAnalyzer:
             ntl_p10 = stats.get('avg_rad_p10', 0) or 0  # Bottom 10% - extreme poverty areas
             ntl_p25 = stats.get('avg_rad_p25', 0) or 0  # Bottom 25% - poverty areas
             
+            if detailed_output:
+                print(f"   📈 Raw Statistics:")
+                print(f"      Mean radiance: {ntl_mean:.4f} nW/cm²/sr")
+                print(f"      Median radiance: {ntl_median:.4f} nW/cm²/sr")
+                print(f"      10th percentile: {ntl_p10:.4f} nW/cm²/sr")
+                print(f"      25th percentile: {ntl_p25:.4f} nW/cm²/sr")
+            
             # Poverty indicators (higher values = more poverty)
             electrification_deficit = max(0, 1 - ntl_mean)  # Lack of electrification
             extreme_poverty_ratio = 1.0 if ntl_p10 < 0.1 else 0.0  # Very dark areas
             economic_isolation_index = max(0, 1 - ntl_median)  # Economic isolation
             
-            return {
+            if detailed_output:
+                print(f"   🔍 Derived Poverty Indicators:")
+                print(f"      Electrification Deficit: {electrification_deficit:.3f} (0=good, 1=poor)")
+                print(f"      Extreme Poverty Ratio: {extreme_poverty_ratio:.3f} (0=none, 1=present)")
+                print(f"      Economic Isolation: {economic_isolation_index:.3f} (0=connected, 1=isolated)")
+                
+                # Interpretation
+                if electrification_deficit > 0.7:
+                    print("      ⚠️ High electrification deficit indicates poor economic development")
+                elif electrification_deficit > 0.4:
+                    print("      🟡 Moderate electrification deficit")
+                else:
+                    print("      ✅ Good electrification levels")
+            
+            results = {
                 'ntl_mean_radiance': ntl_mean,
                 'ntl_median_radiance': ntl_median,
                 'electrification_deficit': electrification_deficit,
@@ -116,16 +153,30 @@ class EnhancedSatellitePovertyAnalyzer:
                 'ntl_pixel_count': stats.get('avg_rad_count', 0)
             }
             
+            if detailed_output:
+                print(f"   ✅ Nighttime lights analysis complete")
+                
+            return results
+            
         except Exception as e:
             print(f"   ❌ Error analyzing nighttime lights: {e}")
             return self._empty_ntl_results()
     
-    def get_housing_quality_indicators(self, geometry, start_date, end_date):
+    def get_housing_quality_indicators(self, geometry, start_date, end_date, detailed_output=False):
         """
         Extract housing quality from Sentinel-2 & SAR data
         Literature: Duque et al. (2015), Kuffer et al. (2016) - roof materials, building density
         Poor housing = Higher poverty
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🏠 DETAILED HOUSING QUALITY ANALYSIS")
+            print("="*60)
+            print("📚 Method: Sentinel-2 optical + Sentinel-1 SAR for roof materials and building structure")
+            print("📊 Logic: Poor roof materials and irregular structures indicate poverty")
+        
         # Print progress message
         print("   🏠 Analyzing housing quality indicators...")
         try:
@@ -141,11 +192,20 @@ class EnhancedSatellitePovertyAnalyzer:
                   .filterBounds(geometry) \
                   .filter(ee.Filter.eq('instrumentMode', 'IW'))
             
+            if detailed_output:
+                s2_size = s2.size().getInfo()
+                s1_size = s1.size().getInfo()
+                print(f"   🛰️ Sentinel-2 images: {s2_size}")
+                print(f"   📡 Sentinel-1 images: {s1_size}")
+            
             # Initialize results dictionary
             results = {}
             
             # Process Sentinel-2 data if available
             if s2.size().getInfo() > 0:
+                if detailed_output:
+                    print("   🔍 Analyzing roof materials with Sentinel-2...")
+                
                 # Calculate indices for roof material assessment
                 s2_composite = s2.median()
                 
@@ -174,6 +234,12 @@ class EnhancedSatellitePovertyAnalyzer:
                 organic_roof_prevalence = roof_stats.get('B4_mean', 0) or 0
                 poor_roof_materials = max(0, organic_roof_prevalence - 0.5)  # High organic/thatch ratio
                 
+                if detailed_output:
+                    print(f"      Metal roof ratio: {roof_stats.get('B8_mean', 0):.3f}")
+                    print(f"      Concrete roof ratio: {roof_stats.get('B11_mean', 0):.3f}")
+                    print(f"      Organic roof prevalence: {organic_roof_prevalence:.3f}")
+                    print(f"      Poor roof materials index: {poor_roof_materials:.3f}")
+                
                 # Update results with roof material indicators
                 results.update({
                     'metal_roof_ratio': roof_stats.get('B8_mean', 0) or 0,
@@ -185,6 +251,9 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Process Sentinel-1 SAR data if available
             if s1.size().getInfo() > 0:
+                if detailed_output:
+                    print("   📡 Analyzing building structure with Sentinel-1 SAR...")
+                
                 # SAR analysis for building density and structure
                 s1_composite = s1.select(['VV', 'VH']).median()
                 
@@ -211,6 +280,11 @@ class EnhancedSatellitePovertyAnalyzer:
                 structure_irregularity = sar_stats.get('VV_stdDev', 0) or 0
                 poor_building_quality = max(0, 1 - (sar_stats.get('VV_mean', 0) or 0))
                 
+                if detailed_output:
+                    print(f"      Building density index: {building_density:.3f}")
+                    print(f"      Structure irregularity: {structure_irregularity:.3f}")
+                    print(f"      Informal settlement index: {poor_building_quality:.3f}")
+                
                 # Update results with building indicators
                 results.update({
                     'building_density_index': building_density,
@@ -219,18 +293,30 @@ class EnhancedSatellitePovertyAnalyzer:
                     'building_quality_variance': structure_irregularity
                 })
             
+            if detailed_output:
+                print(f"   ✅ Housing quality analysis complete")
+                
             return results
             
         except Exception as e:
             print(f"   ❌ Error analyzing housing quality: {e}")
             return {}
     
-    def get_infrastructure_poverty_indicators(self, geometry):
+    def get_infrastructure_poverty_indicators(self, geometry, detailed_output=False):
         """
         Extract infrastructure-based poverty indicators
         Literature: Watmough et al. (2019) - road access, market access as poverty indicators
         Poor infrastructure access = Higher poverty
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🛣️ DETAILED INFRASTRUCTURE ANALYSIS")
+            print("="*60)
+            print("📚 Method: Global Surface Water + SRTM DEM for water access and terrain analysis")
+            print("📊 Logic: Distance to water and difficult terrain indicate infrastructure poverty")
+        
         # Print progress message
         print("   🛣️ Analyzing infrastructure poverty indicators...")
         try:
@@ -240,6 +326,9 @@ class EnhancedSatellitePovertyAnalyzer:
             # Water access analysis using Global Surface Water
             gsw = ee.Image('JRC/GSW1_4/GlobalSurfaceWater')
             water_occurrence = gsw.select('occurrence')
+            
+            if detailed_output:
+                print("   💧 Analyzing water access...")
             
             # Distance to reliable water sources (occurrence > 50%)
             reliable_water = water_occurrence.gt(50)
@@ -258,13 +347,22 @@ class EnhancedSatellitePovertyAnalyzer:
             ).getInfo()
             
             # Water poverty indicators
-            water_access_deficit = min(1.0, (water_stats.get('distance_mean', 5000) or 5000) / 5000)
+            water_distance_m = water_stats.get('distance_mean', 5000) or 5000
+            water_access_deficit = min(1.0, water_distance_m / 5000)
             severe_water_shortage = 1.0 if (water_stats.get('distance_min', 5000) or 5000) > 2000 else 0.0
+            
+            if detailed_output:
+                print(f"      Average distance to water: {water_distance_m/1000:.1f} km")
+                print(f"      Water access deficit: {water_access_deficit:.3f}")
+                print(f"      Severe water shortage: {'Yes' if severe_water_shortage > 0.5 else 'No'}")
             
             # Terrain accessibility analysis using SRTM DEM
             dem = ee.Image('USGS/SRTMGL1_003')
             terrain = ee.Algorithms.Terrain(dem)
             slope = terrain.select('slope')
+            
+            if detailed_output:
+                print("   ⛰️ Analyzing terrain accessibility...")
             
             # Calculate terrain statistics
             terrain_stats = slope.reduceRegion(
@@ -283,6 +381,11 @@ class EnhancedSatellitePovertyAnalyzer:
             terrain_isolation = min(1.0, mean_slope / 15.0)  # Normalize by 15 degrees
             geographic_isolation = 1.0 if mean_slope > 10 else 0.0
             
+            if detailed_output:
+                print(f"      Mean slope: {mean_slope:.1f} degrees")
+                print(f"      Terrain isolation index: {terrain_isolation:.3f}")
+                print(f"      Geographic isolation: {'Yes' if geographic_isolation > 0.5 else 'No'}")
+            
             # Update results with infrastructure indicators
             results.update({
                 'water_access_deficit': water_access_deficit,
@@ -290,8 +393,11 @@ class EnhancedSatellitePovertyAnalyzer:
                 'terrain_isolation_index': terrain_isolation,
                 'geographic_isolation': geographic_isolation,
                 'mean_slope_degrees': mean_slope,
-                'water_distance_km': (water_stats.get('distance_mean', 0) or 0) / 1000
+                'water_distance_km': water_distance_m / 1000
             })
+            
+            if detailed_output:
+                print(f"   ✅ Infrastructure analysis complete")
             
             return results
             
@@ -299,12 +405,21 @@ class EnhancedSatellitePovertyAnalyzer:
             print(f"   ❌ Error analyzing infrastructure: {e}")
             return {}
     
-    def get_environmental_poverty_indicators(self, geometry, start_date, end_date):
+    def get_environmental_poverty_indicators(self, geometry, start_date, end_date, detailed_output=False):
         """
         Extract environmental poverty indicators
         Literature: Chakraborty et al. (2017) - environmental quality and poverty correlation
         Poor environmental conditions = Higher poverty risk
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🌱 DETAILED ENVIRONMENTAL ANALYSIS")
+            print("="*60)
+            print("📚 Method: Sentinel-2 NDVI + Sentinel-5P air quality for environmental conditions")
+            print("📊 Logic: Poor vegetation and high pollution correlate with poverty")
+        
         # Print progress message
         print("   🌱 Analyzing environmental poverty indicators...")
         try:
@@ -319,6 +434,9 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Process Sentinel-2 data if available
             if s2.size().getInfo() > 0:
+                if detailed_output:
+                    print(f"   🌿 Analyzing vegetation with {s2.size().getInfo()} Sentinel-2 images...")
+                
                 # Create median composite
                 s2_composite = s2.median()
                 
@@ -341,21 +459,39 @@ class EnhancedSatellitePovertyAnalyzer:
                 ).getInfo()
                 
                 # Environmental poverty indicators
-                vegetation_deficit = max(0, 0.3 - (env_stats.get('nd_mean', 0) or 0))  # Low NDVI
+                ndvi_mean = env_stats.get('nd_mean', 0) or 0
+                vegetation_deficit = max(0, 0.3 - ndvi_mean)  # Low NDVI
                 environmental_degradation = max(0, (env_stats.get('nd_1_mean', 0) or 0) - 0.1)  # High bare soil
-                green_space_deprivation = 1.0 if (env_stats.get('nd_mean', 0) or 0) < 0.2 else 0.0
+                green_space_deprivation = 1.0 if ndvi_mean < 0.2 else 0.0
+                
+                if detailed_output:
+                    print(f"      Mean NDVI: {ndvi_mean:.3f}")
+                    print(f"      Vegetation deficit: {vegetation_deficit:.3f}")
+                    print(f"      Environmental degradation: {environmental_degradation:.3f}")
+                    print(f"      Green space deprivation: {'Yes' if green_space_deprivation > 0.5 else 'No'}")
+                    
+                    # Interpretation
+                    if ndvi_mean > 0.4:
+                        print("      ✅ Good vegetation health")
+                    elif ndvi_mean > 0.2:
+                        print("      🟡 Moderate vegetation")
+                    else:
+                        print("      ⚠️ Poor vegetation - indicates degraded environment")
                 
                 # Update results with environmental indicators
                 results.update({
                     'vegetation_deficit': vegetation_deficit,
                     'environmental_degradation': environmental_degradation,
                     'green_space_deprivation': green_space_deprivation,
-                    'mean_ndvi': env_stats.get('nd_mean', 0) or 0,
+                    'mean_ndvi': ndvi_mean,
                     'bare_soil_ratio': env_stats.get('nd_1_mean', 0) or 0
                 })
             
             # Air quality proxy from Sentinel-5P
             try:
+                if detailed_output:
+                    print("   🌫️ Analyzing air quality with Sentinel-5P...")
+                
                 # Get NO2 data from Sentinel-5P TROPOMI
                 no2 = ee.ImageCollection('COPERNICUS/S5P/NRTI/L3_NO2') \
                        .filterDate(start_date, end_date) \
@@ -374,12 +510,24 @@ class EnhancedSatellitePovertyAnalyzer:
                     ).getInfo()
                     
                     # Air pollution poverty indicator
-                    air_pollution_burden = min(1.0, max(0, (no2_stats.get('NO2_column_number_density', 0) or 0) * 1e6))
+                    no2_density = no2_stats.get('NO2_column_number_density', 0) or 0
+                    air_pollution_burden = min(1.0, max(0, no2_density * 1e6))
+                    
+                    if detailed_output:
+                        print(f"      NO2 density: {no2_density:.2e} mol/m²")
+                        print(f"      Air pollution burden: {air_pollution_burden:.3f}")
                     
                     # Update results with air quality indicators
                     results.update({
                         'air_pollution_burden': air_pollution_burden,
-                        'no2_density': no2_stats.get('NO2_column_number_density', 0) or 0
+                        'no2_density': no2_density
+                    })
+                else:
+                    if detailed_output:
+                        print("      ⚠️ No Sentinel-5P data available")
+                    results.update({
+                        'air_pollution_burden': 0,
+                        'no2_density': 0
                     })
             except:
                 # Default air quality values if data unavailable
@@ -388,17 +536,29 @@ class EnhancedSatellitePovertyAnalyzer:
                     'no2_density': 0
                 })
             
+            if detailed_output:
+                print(f"   ✅ Environmental analysis complete")
+            
             return results
             
         except Exception as e:
             print(f"   ❌ Error analyzing environmental indicators: {e}")
             return {}
     
-    def get_population_poverty_indicators(self, geometry, year=2020):
+    def get_population_poverty_indicators(self, geometry, year=2020, detailed_output=False):
         """
         Extract population-based poverty indicators
         Literature: Steele et al. (2017) - population density patterns and poverty
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n👥 DETAILED POPULATION ANALYSIS")
+            print("="*60)
+            print("📚 Method: WorldPop high-resolution population data")
+            print("📊 Logic: Population density patterns and inequality indicate settlement quality")
+        
         # Print progress message
         print("   👥 Analyzing population poverty indicators...")
         try:
@@ -409,7 +569,12 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Return empty results if no population data
             if population.size().getInfo() == 0:
+                if detailed_output:
+                    print("   ⚠️ No WorldPop data available")
                 return {}
+            
+            if detailed_output:
+                print(f"   📊 Using WorldPop {year} data for India")
             
             # Create population mosaic
             pop_image = population.mosaic()
@@ -450,7 +615,22 @@ class EnhancedSatellitePovertyAnalyzer:
             pop_p10 = pop_stats.get('population_p10', 0) or 0
             settlement_disparity = (pop_p90 - pop_p10) / max(pop_mean, 1)
             
-            return {
+            if detailed_output:
+                print(f"      Total population: {total_pop:.0f} people")
+                print(f"      Population density: {pop_density:.1f} people/km²")
+                print(f"      Population inequality: {population_inequality:.3f}")
+                print(f"      Overcrowding index: {overcrowding_index:.3f}")
+                print(f"      Settlement disparity: {settlement_disparity:.3f}")
+                
+                # Interpretation
+                if pop_density > 5000:
+                    print("      ⚠️ High density - potential overcrowding")
+                elif pop_density > 1000:
+                    print("      🟡 Moderate density")
+                else:
+                    print("      ✅ Low to moderate density")
+            
+            results = {
                 'total_population': total_pop,
                 'population_density_per_km2': pop_density,
                 'population_inequality': population_inequality,
@@ -459,15 +639,29 @@ class EnhancedSatellitePovertyAnalyzer:
                 'area_km2': area_km2
             }
             
+            if detailed_output:
+                print(f"   ✅ Population analysis complete")
+            
+            return results
+            
         except Exception as e:
             print(f"   ❌ Error analyzing population indicators: {e}")
             return {}
     
-    def get_enhanced_access_indicators(self, geometry):
+    def get_enhanced_access_indicators(self, geometry, detailed_output=False):
         """
         Analyze access to hospitals, airports, and markets using road networks
         Literature: Alegana et al. (2012) - healthcare access; Kwan (2006) - transportation access
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🏥 DETAILED ACCESS ANALYSIS")
+            print("="*60)
+            print("📚 Method: Distance to major cities/airports + population density for market access")
+            print("📊 Logic: Distance to services and low population indicate poor access")
+        
         # Print progress message
         print("   🏥 Analyzing enhanced access indicators (hospitals, airports, markets)...")
         try:
@@ -476,6 +670,9 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Try to get OSM healthcare facilities
             try:
+                if detailed_output:
+                    print("   🏥 Calculating healthcare access...")
+                
                 # Healthcare facilities analysis (using point locations as proxy)
                 # Distance calculation based on region centroid
                 region_centroid = geometry.centroid()
@@ -507,6 +704,16 @@ class EnhancedSatellitePovertyAnalyzer:
                 hospital_access_km = min_city_distance
                 hospital_access_deficit = min(1.0, hospital_access_km / 50.0)  # Normalize by 50km
                 
+                if detailed_output:
+                    print(f"      Distance to nearest major city: {hospital_access_km:.1f} km")
+                    print(f"      Hospital access deficit: {hospital_access_deficit:.3f}")
+                    if hospital_access_km > 30:
+                        print("      ⚠️ Poor healthcare access - far from major medical centers")
+                    elif hospital_access_km > 15:
+                        print("      🟡 Moderate healthcare access")
+                    else:
+                        print("      ✅ Good healthcare access")
+                
                 # Update results with healthcare access
                 results.update({
                     'distance_to_nearest_major_city_km': hospital_access_km,
@@ -525,6 +732,9 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Airport access analysis
             try:
+                if detailed_output:
+                    print("   ✈️ Calculating airport access...")
+                
                 # Major airports in India
                 major_airports = [
                     [77.1025, 28.5562],  # Delhi Airport
@@ -553,6 +763,16 @@ class EnhancedSatellitePovertyAnalyzer:
                 airport_access_km = min_airport_distance
                 airport_access_deficit = min(1.0, airport_access_km / 100.0)  # Normalize by 100km
                 
+                if detailed_output:
+                    print(f"      Distance to nearest airport: {airport_access_km:.1f} km")
+                    print(f"      Airport access deficit: {airport_access_deficit:.3f}")
+                    if airport_access_km > 80:
+                        print("      ⚠️ Poor transportation access - far from airports")
+                    elif airport_access_km > 40:
+                        print("      🟡 Moderate transportation access")
+                    else:
+                        print("      ✅ Good transportation access")
+                
                 # Update results with airport access
                 results.update({
                     'distance_to_nearest_airport_km': airport_access_km,
@@ -571,6 +791,9 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Market access analysis (using populated areas as proxy)
             try:
+                if detailed_output:
+                    print("   🏪 Calculating market access...")
+                
                 # Use population density as proxy for market access
                 # Areas with higher population typically have better market access
                 population = ee.ImageCollection('WorldPop/GP/100m/pop') \
@@ -604,6 +827,17 @@ class EnhancedSatellitePovertyAnalyzer:
                     # Economic opportunities index
                     economic_opportunities = market_access_score
                     
+                    if detailed_output:
+                        print(f"      Surrounding population (10km): {surrounding_population:.0f}")
+                        print(f"      Market access score: {market_access_score:.3f}")
+                        print(f"      Market access deficit: {market_access_deficit:.3f}")
+                        if market_access_score > 0.7:
+                            print("      ✅ Good market access - high surrounding population")
+                        elif market_access_score > 0.4:
+                            print("      🟡 Moderate market access")
+                        else:
+                            print("      ⚠️ Poor market access - low surrounding population")
+                    
                     # Update results with market access
                     results.update({
                         'surrounding_population_10km': surrounding_population,
@@ -631,17 +865,29 @@ class EnhancedSatellitePovertyAnalyzer:
                     'economic_opportunities_index': 0.5
                 })
             
+            if detailed_output:
+                print(f"   ✅ Access analysis complete")
+            
             return results
             
         except Exception as e:
             print(f"   ❌ Error analyzing enhanced access indicators: {e}")
             return {}
     
-    def get_road_quality_indicators(self, geometry, start_date, end_date):
+    def get_road_quality_indicators(self, geometry, start_date, end_date, detailed_output=False):
         """
         Analyze road quality using Sentinel-2 spectral characteristics
         Literature: Engstrom et al. (2020) - road surface material detection
+        
+        Args:
+            detailed_output: If True, prints detailed analysis of each step
         """
+        if detailed_output:
+            print("\n🛣️ DETAILED ROAD QUALITY ANALYSIS")
+            print("="*60)
+            print("📚 Method: Sentinel-2 spectral analysis for road surface materials")
+            print("📊 Logic: Paved roads have different spectral signatures than unpaved roads")
+        
         # Print progress message
         print("   🛣️ Analyzing road quality indicators...")
         try:
@@ -653,7 +899,12 @@ class EnhancedSatellitePovertyAnalyzer:
             
             # Return empty results if no data
             if s2.size().getInfo() == 0:
+                if detailed_output:
+                    print("   ⚠️ No Sentinel-2 data available for road analysis")
                 return {}
+            
+            if detailed_output:
+                print(f"   🛰️ Using {s2.size().getInfo()} Sentinel-2 images")
             
             # Create median composite
             s2_composite = s2.median()
@@ -685,13 +936,40 @@ class EnhancedSatellitePovertyAnalyzer:
             road_quality_deficit = min(1.0, unpaved_ratio / max(paved_ratio, 0.1))
             road_infrastructure_score = 1 - road_quality_deficit
             
-            return {
+            # Road surface quality classification
+            if road_quality_deficit < 0.3:
+                road_surface_quality = "Good"
+            elif road_quality_deficit < 0.7:
+                road_surface_quality = "Moderate"
+            else:
+                road_surface_quality = "Poor"
+            
+            if detailed_output:
+                print(f"      Paved road index: {paved_ratio:.3f}")
+                print(f"      Unpaved road index: {unpaved_ratio:.3f}")
+                print(f"      Road quality deficit: {road_quality_deficit:.3f}")
+                print(f"      Road infrastructure score: {road_infrastructure_score:.3f}")
+                print(f"      Road surface quality: {road_surface_quality}")
+                
+                if road_quality_deficit > 0.7:
+                    print("      ⚠️ Poor road quality - predominantly unpaved surfaces")
+                elif road_quality_deficit > 0.3:
+                    print("      🟡 Moderate road quality - mixed surface types")
+                else:
+                    print("      ✅ Good road quality - predominantly paved surfaces")
+            
+            results = {
                 'paved_road_index': paved_ratio,
                 'unpaved_road_index': unpaved_ratio,
                 'road_quality_deficit': road_quality_deficit,
                 'road_infrastructure_score': road_infrastructure_score,
-                'road_surface_quality': "Good" if road_quality_deficit < 0.3 else "Moderate" if road_quality_deficit < 0.7 else "Poor"
+                'road_surface_quality': road_surface_quality
             }
+            
+            if detailed_output:
+                print(f"   ✅ Road quality analysis complete")
+            
+            return results
             
         except Exception as e:
             print(f"   ❌ Error analyzing road quality: {e}")
@@ -842,9 +1120,383 @@ class EnhancedSatellitePovertyAnalyzer:
         
         return base_mpi
     
+    # ========================================
+    # FLEXIBLE SELECTIVE ANALYSIS METHODS
+    # ========================================
+    
+    def analyze_selective_measures(self, lat, lon, radius_km, measures=None, start_date='2023-01-01', end_date='2023-12-31', detailed_output=False):
+        """
+        Flexible analysis - select specific measures to analyze at any lat/long
+        
+        Args:
+            lat, lon, radius_km: Location parameters
+            measures: List of measures to analyze. Options:
+                     'ntl' or 'nighttime_lights' - Nighttime lights poverty indicators
+                     'housing' - Housing quality indicators
+                     'infrastructure' - Water access and terrain
+                     'environmental' - Environmental conditions
+                     'population' - Population patterns
+                     'access' - Hospital/airport/market access
+                     'roads' - Road quality
+                     'mpi' - Calculate MPI from available measures
+                     If None, analyzes all measures (same as comprehensive analysis)
+            start_date, end_date: Date range for analysis
+            detailed_output: If True, shows detailed step-by-step analysis
+            
+        Returns:
+            Dictionary with results for selected measures only
+        """
+        
+        print(f"\n🎯 SELECTIVE POVERTY ANALYSIS")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        
+        # Default to all measures if none specified
+        if measures is None:
+            measures = ['ntl', 'housing', 'infrastructure', 'environmental', 'population', 'access', 'roads', 'mpi']
+            print(f"🔍 Analyzing: ALL MEASURES (comprehensive analysis)")
+        else:
+            # Ensure measures is a list
+            if isinstance(measures, str):
+                measures = [measures]
+            print(f"🔍 Analyzing: {', '.join(measures).upper()}")
+        
+        print("="*70)
+        
+        # Create geometry
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        
+        # Initialize results
+        results = {
+            'latitude': lat,
+            'longitude': lon,
+            'radius_km': radius_km,
+            'analysis_date': datetime.now().isoformat(),
+            'start_date': start_date,
+            'end_date': end_date,
+            'selected_measures': measures,
+            'data_sources': []
+        }
+        
+        # Normalize measure names for flexible input
+        measure_mapping = {
+            'ntl': 'nighttime_lights',
+            'nighttime_lights': 'nighttime_lights',
+            'economic': 'nighttime_lights',
+            'housing': 'housing',
+            'housing_quality': 'housing',
+            'infrastructure': 'infrastructure',
+            'infra': 'infrastructure',
+            'water': 'infrastructure',
+            'environmental': 'environmental',
+            'environment': 'environmental',
+            'env': 'environmental',
+            'vegetation': 'environmental',
+            'population': 'population',
+            'pop': 'population',
+            'demographic': 'population',
+            'access': 'access',
+            'accessibility': 'access',
+            'services': 'access',
+            'roads': 'roads',
+            'road_quality': 'roads',
+            'transportation': 'roads',
+            'mpi': 'mpi',
+            'index': 'mpi',
+            'poverty_index': 'mpi'
+        }
+        
+        # Normalize measure names
+        normalized_measures = []
+        for measure in measures:
+            normalized = measure_mapping.get(measure.lower(), measure.lower())
+            if normalized not in normalized_measures:
+                normalized_measures.append(normalized)
+        
+        # Analysis methods mapping
+        analysis_methods = {
+            'nighttime_lights': lambda: self.get_poverty_from_nighttime_lights(geometry, start_date, end_date, detailed_output),
+            'housing': lambda: self.get_housing_quality_indicators(geometry, start_date, end_date, detailed_output),
+            'infrastructure': lambda: self.get_infrastructure_poverty_indicators(geometry, detailed_output),
+            'environmental': lambda: self.get_environmental_poverty_indicators(geometry, start_date, end_date, detailed_output),
+            'population': lambda: self.get_population_poverty_indicators(geometry, 2020, detailed_output),
+            'access': lambda: self.get_enhanced_access_indicators(geometry, detailed_output),
+            'roads': lambda: self.get_road_quality_indicators(geometry, start_date, end_date, detailed_output)
+        }
+        
+        # Run selected analyses
+        for measure in normalized_measures:
+            if measure == 'mpi':
+                continue  # Handle MPI separately after other measures
+                
+            if measure in analysis_methods:
+                try:
+                    print(f"\n🔍 Analyzing {measure.replace('_', ' ').title()}...")
+                    measure_results = analysis_methods[measure]()
+                    results.update(measure_results)
+                    results['data_sources'].append(f"{measure.title()}_Analysis")
+                    
+                    if detailed_output:
+                        print(f"   ✅ {measure.replace('_', ' ').title()} analysis complete")
+                        
+                except Exception as e:
+                    print(f"   ❌ {measure.replace('_', ' ').title()} analysis failed: {e}")
+            else:
+                print(f"   ⚠️ Unknown measure: {measure}")
+        
+        # Calculate MPI if requested and we have data
+        if 'mpi' in normalized_measures and len([k for k in results.keys() if k not in ['latitude', 'longitude', 'radius_km', 'analysis_date', 'start_date', 'end_date', 'selected_measures', 'data_sources']]) > 0:
+            try:
+                print(f"\n📊 Calculating poverty indices...")
+                mpi_results = self.calculate_enhanced_mpi(results)
+                results.update(mpi_results)
+                results['data_sources'].append('Enhanced_MPI')
+                
+                if detailed_output:
+                    print(f"   ✅ MPI calculation complete")
+                    
+            except Exception as e:
+                print(f"   ❌ MPI calculation failed: {e}")
+        
+        # Summary
+        print(f"\n✅ SELECTIVE ANALYSIS COMPLETE!")
+        print(f"📊 Measures analyzed: {len(normalized_measures)}")
+        print(f"📈 Data sources used: {len(results['data_sources'])}")
+        
+        # Quick summary for selected measures
+        self._print_selective_summary(results, normalized_measures)
+        
+        return results
+    
+    def _print_selective_summary(self, results, measures):
+        """Print a quick summary of selected measures"""
+        print(f"\n📋 QUICK SUMMARY:")
+        
+        if 'nighttime_lights' in measures and 'electrification_deficit' in results:
+            electrification = 1 - results.get('electrification_deficit', 0)
+            print(f"   🌙 Economic Activity (NTL): {'Good' if electrification > 0.7 else 'Moderate' if electrification > 0.4 else 'Poor'}")
+            
+        if 'housing' in measures and 'poor_roof_materials_index' in results:
+            housing_quality = 1 - results.get('poor_roof_materials_index', 0)
+            print(f"   🏠 Housing Quality: {'Good' if housing_quality > 0.7 else 'Moderate' if housing_quality > 0.4 else 'Poor'}")
+            
+        if 'infrastructure' in measures and 'water_access_deficit' in results:
+            water_access = 1 - results.get('water_access_deficit', 0)
+            print(f"   💧 Water Access: {'Good' if water_access > 0.7 else 'Moderate' if water_access > 0.4 else 'Poor'}")
+            
+        if 'environmental' in measures and 'mean_ndvi' in results:
+            env_health = results.get('mean_ndvi', 0)
+            print(f"   🌱 Environmental Health: {'Good' if env_health > 0.4 else 'Moderate' if env_health > 0.2 else 'Poor'}")
+            
+        if 'population' in measures and 'population_density_per_km2' in results:
+            density = results.get('population_density_per_km2', 0)
+            print(f"   👥 Population Density: {density:.0f} people/km² ({'High' if density > 5000 else 'Moderate' if density > 1000 else 'Low'})")
+            
+        if 'access' in measures and 'hospital_access_deficit' in results:
+            health_access = 1 - results.get('hospital_access_deficit', 0)
+            print(f"   🏥 Healthcare Access: {'Good' if health_access > 0.7 else 'Moderate' if health_access > 0.4 else 'Poor'}")
+            
+        if 'roads' in measures and 'road_infrastructure_score' in results:
+            road_quality = results.get('road_infrastructure_score', 0)
+            print(f"   🛣️ Road Quality: {'Good' if road_quality > 0.7 else 'Moderate' if road_quality > 0.4 else 'Poor'}")
+            
+        if 'mpi' in measures and 'enhanced_mpi' in results:
+            mpi = results.get('enhanced_mpi', results.get('multidimensional_poverty_index', 0))
+            poverty_level = results.get('enhanced_poverty_level', results.get('poverty_level_classification', 'Unknown'))
+            print(f"   📊 Overall Poverty Level: {poverty_level} (MPI: {mpi:.3f})")
+    
+    def analyze_ntl_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31', detailed=False):
+        """Quick method to analyze only nighttime lights at any location"""
+        return self.analyze_selective_measures(lat, lon, radius_km, measures=['ntl'], 
+                                             start_date=start_date, end_date=end_date, 
+                                             detailed_output=detailed)
+    
+    def analyze_housing_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31', detailed=False):
+        """Quick method to analyze only housing quality at any location"""
+        return self.analyze_selective_measures(lat, lon, radius_km, measures=['housing'], 
+                                             start_date=start_date, end_date=end_date, 
+                                             detailed_output=detailed)
+    
+    def analyze_access_only(self, lat, lon, radius_km, detailed=False):
+        """Quick method to analyze only access indicators at any location"""
+        return self.analyze_selective_measures(lat, lon, radius_km, measures=['access'], 
+                                             detailed_output=detailed)
+    
+    def analyze_custom_combination(self, lat, lon, radius_km, measures, start_date='2023-01-01', end_date='2023-12-31', detailed=False):
+        """Analyze any custom combination of measures at any location"""
+        return self.analyze_selective_measures(lat, lon, radius_km, measures=measures, 
+                                             start_date=start_date, end_date=end_date, 
+                                             detailed_output=detailed)
+    
+    # ========================================
+    # INDIVIDUAL MEASURE INSPECTION METHODS (PRESERVED)
+    # ========================================
+    
+    def inspect_nighttime_lights_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
+        """Analyze only nighttime lights poverty indicators with detailed output"""
+        print(f"\n🌙 NIGHTTIME LIGHTS POVERTY INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_poverty_from_nighttime_lights(geometry, start_date, end_date, detailed_output=True)
+        
+        print(f"\n📋 NIGHTTIME LIGHTS SUMMARY:")
+        print(f"   Economic Isolation: {'High' if results.get('economic_isolation_index', 0) > 0.6 else 'Moderate' if results.get('economic_isolation_index', 0) > 0.3 else 'Low'}")
+        print(f"   Electrification Level: {'Poor' if results.get('electrification_deficit', 0) > 0.6 else 'Moderate' if results.get('electrification_deficit', 0) > 0.3 else 'Good'}")
+        
+        return results
+    
+    def inspect_housing_quality_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
+        """Analyze only housing quality indicators with detailed output"""
+        print(f"\n🏠 HOUSING QUALITY INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_housing_quality_indicators(geometry, start_date, end_date, detailed_output=True)
+        
+        print(f"\n📋 HOUSING QUALITY SUMMARY:")
+        if 'poor_roof_materials_index' in results:
+            housing_score = 1 - results.get('poor_roof_materials_index', 0)
+            print(f"   Housing Quality: {'Good' if housing_score > 0.7 else 'Moderate' if housing_score > 0.4 else 'Poor'}")
+        if 'informal_settlement_index' in results:
+            settlement_quality = 1 - results.get('informal_settlement_index', 0)
+            print(f"   Settlement Quality: {'Formal' if settlement_quality > 0.7 else 'Mixed' if settlement_quality > 0.4 else 'Informal'}")
+        
+        return results
+    
+    def inspect_infrastructure_only(self, lat, lon, radius_km):
+        """Analyze only infrastructure indicators with detailed output"""
+        print(f"\n🛣️ INFRASTRUCTURE INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_infrastructure_poverty_indicators(geometry, detailed_output=True)
+        
+        print(f"\n📋 INFRASTRUCTURE SUMMARY:")
+        if 'water_access_deficit' in results:
+            water_quality = 1 - results.get('water_access_deficit', 0)
+            print(f"   Water Access: {'Good' if water_quality > 0.7 else 'Moderate' if water_quality > 0.4 else 'Poor'}")
+        if 'terrain_isolation_index' in results:
+            terrain_access = 1 - results.get('terrain_isolation_index', 0)
+            print(f"   Terrain Accessibility: {'Easy' if terrain_access > 0.7 else 'Moderate' if terrain_access > 0.4 else 'Difficult'}")
+        
+        return results
+    
+    def inspect_environmental_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
+        """Analyze only environmental indicators with detailed output"""
+        print(f"\n🌱 ENVIRONMENTAL INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_environmental_poverty_indicators(geometry, start_date, end_date, detailed_output=True)
+        
+        print(f"\n📋 ENVIRONMENTAL SUMMARY:")
+        if 'mean_ndvi' in results:
+            veg_health = results.get('mean_ndvi', 0)
+            print(f"   Vegetation Health: {'Good' if veg_health > 0.4 else 'Moderate' if veg_health > 0.2 else 'Poor'}")
+        if 'air_pollution_burden' in results:
+            air_quality = 1 - results.get('air_pollution_burden', 0)
+            print(f"   Air Quality: {'Good' if air_quality > 0.7 else 'Moderate' if air_quality > 0.4 else 'Poor'}")
+        
+        return results
+    
+    def inspect_population_only(self, lat, lon, radius_km, year=2020):
+        """Analyze only population indicators with detailed output"""
+        print(f"\n👥 POPULATION INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_population_poverty_indicators(geometry, year, detailed_output=True)
+        
+        print(f"\n📋 POPULATION SUMMARY:")
+        if 'population_density_per_km2' in results:
+            density = results.get('population_density_per_km2', 0)
+            print(f"   Population Density: {'High' if density > 5000 else 'Moderate' if density > 1000 else 'Low'}")
+        if 'overcrowding_index' in results:
+            crowding = results.get('overcrowding_index', 0)
+            print(f"   Overcrowding Level: {'High' if crowding > 0.6 else 'Moderate' if crowding > 0.3 else 'Low'}")
+        
+        return results
+    
+    def inspect_access_only(self, lat, lon, radius_km):
+        """Analyze only access indicators with detailed output"""
+        print(f"\n🏥 ACCESS INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_enhanced_access_indicators(geometry, detailed_output=True)
+        
+        print(f"\n📋 ACCESS SUMMARY:")
+        if 'hospital_access_deficit' in results:
+            health_access = 1 - results.get('hospital_access_deficit', 0)
+            print(f"   Healthcare Access: {'Good' if health_access > 0.7 else 'Moderate' if health_access > 0.4 else 'Poor'}")
+        if 'airport_access_deficit' in results:
+            transport_access = 1 - results.get('airport_access_deficit', 0)
+            print(f"   Transportation Access: {'Good' if transport_access > 0.7 else 'Moderate' if transport_access > 0.4 else 'Poor'}")
+        if 'market_access_score' in results:
+            market_access = results.get('market_access_score', 0)
+            print(f"   Market Access: {'Good' if market_access > 0.7 else 'Moderate' if market_access > 0.4 else 'Poor'}")
+        
+        return results
+    
+    def inspect_road_quality_only(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
+        """Analyze only road quality indicators with detailed output"""
+        print(f"\n🛣️ ROAD QUALITY INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*70)
+        
+        geometry = self.create_buffer_zone(lat, lon, radius_km)
+        results = self.get_road_quality_indicators(geometry, start_date, end_date, detailed_output=True)
+        
+        print(f"\n📋 ROAD QUALITY SUMMARY:")
+        if 'road_infrastructure_score' in results:
+            road_score = results.get('road_infrastructure_score', 0)
+            print(f"   Road Infrastructure: {'Good' if road_score > 0.7 else 'Moderate' if road_score > 0.4 else 'Poor'}")
+        if 'road_surface_quality' in results:
+            print(f"   Surface Quality: {results.get('road_surface_quality', 'Unknown')}")
+        
+        return results
+    
+    def inspect_all_measures_detailed(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
+        """Run detailed inspection of all individual measures"""
+        print(f"\n🔍 COMPREHENSIVE DETAILED INSPECTION")
+        print(f"📍 Location: ({lat:.4f}, {lon:.4f}) | Radius: {radius_km} km")
+        print("="*80)
+        
+        all_results = {}
+        
+        # Run each individual inspection
+        all_results.update(self.inspect_nighttime_lights_only(lat, lon, radius_km, start_date, end_date))
+        all_results.update(self.inspect_housing_quality_only(lat, lon, radius_km, start_date, end_date))
+        all_results.update(self.inspect_infrastructure_only(lat, lon, radius_km))
+        all_results.update(self.inspect_environmental_only(lat, lon, radius_km, start_date, end_date))
+        all_results.update(self.inspect_population_only(lat, lon, radius_km))
+        all_results.update(self.inspect_access_only(lat, lon, radius_km))
+        all_results.update(self.inspect_road_quality_only(lat, lon, radius_km, start_date, end_date))
+        
+        # Calculate MPI
+        mpi_results = self.calculate_enhanced_mpi(all_results)
+        all_results.update(mpi_results)
+        
+        print(f"\n🎯 FINAL COMPREHENSIVE ASSESSMENT:")
+        print(f"   Enhanced MPI: {all_results.get('enhanced_mpi', 0):.3f}")
+        print(f"   Poverty Level: {all_results.get('enhanced_poverty_level', 'Unknown')}")
+        
+        return all_results
+    
+    # ========================================
+    # ORIGINAL COMPREHENSIVE ANALYSIS METHOD (UNCHANGED)
+    # ========================================
+    
     def analyze_poverty_conditions(self, lat, lon, radius_km, start_date='2023-01-01', end_date='2023-12-31'):
         """
         Comprehensive poverty analysis using satellite data with enhanced indicators
+        (Original method - unchanged to maintain flow integrity)
         """
         # Print analysis header
         print(f"\n🔍 COMPREHENSIVE ENHANCED POVERTY ANALYSIS")
@@ -1074,7 +1726,10 @@ class EnhancedSatellitePovertyAnalyzer:
             'ntl_pixel_count': 0
         }
 
-# Additional utility functions for enhanced socioeconomic analysis
+# ========================================
+# ENHANCED UTILITY FUNCTIONS WITH SELECTIVE ANALYSIS
+# ========================================
+
 def compare_poverty_levels(analyzer, locations):
     """Compare poverty levels across multiple locations with enhanced indicators"""
     print("🔍 ENHANCED COMPARATIVE POVERTY ANALYSIS")
@@ -1109,6 +1764,156 @@ def compare_poverty_levels(analyzer, locations):
         print(f"{result['location_name']:<25} {enhanced_mpi:<15.3f} {poverty_level:<15} {access_qual_text:<15} {risk}")
     
     return all_results
+
+def compare_selective_measures(analyzer, locations, measures):
+    """Compare specific measures across multiple locations"""
+    print(f"🔍 SELECTIVE MEASURES COMPARISON: {', '.join(measures).upper()}")
+    print("="*80)
+    
+    all_results = []
+    
+    for location in locations:
+        print(f"\n📍 Analyzing {location['name']} - Selected Measures Only")
+        
+        # Extract location parameters
+        params = {k: v for k, v in location.items() if k != 'name'}
+        
+        # Run selective analysis
+        results = analyzer.analyze_selective_measures(measures=measures, **params)
+        results['location_name'] = location['name']
+        all_results.append(results)
+    
+    # Create comparison table
+    print(f"\n📊 SELECTIVE COMPARISON SUMMARY:")
+    print(f"{'Location':<20}", end='')
+    
+    # Dynamic headers based on measures
+    if 'ntl' in measures or 'nighttime_lights' in measures:
+        print(f"{'NTL Score':<12}", end='')
+    if 'housing' in measures:
+        print(f"{'Housing':<12}", end='')
+    if 'infrastructure' in measures:
+        print(f"{'Water':<12}", end='')
+    if 'environmental' in measures:
+        print(f"{'Environment':<12}", end='')
+    if 'population' in measures:
+        print(f"{'Pop Density':<12}", end='')
+    if 'access' in measures:
+        print(f"{'Access':<12}", end='')
+    if 'roads' in measures:
+        print(f"{'Roads':<12}", end='')
+    if 'mpi' in measures:
+        print(f"{'MPI':<12}", end='')
+    
+    print()  # New line
+    print("-" * (20 + 12 * len([m for m in measures if m in ['ntl', 'nighttime_lights', 'housing', 'infrastructure', 'environmental', 'population', 'access', 'roads', 'mpi']])))
+    
+    # Print data rows
+    for result in all_results:
+        print(f"{result['location_name']:<20}", end='')
+        
+        if 'ntl' in measures or 'nighttime_lights' in measures:
+            ntl_score = 1 - result.get('electrification_deficit', 0.5)
+            print(f"{ntl_score:<12.3f}", end='')
+        if 'housing' in measures:
+            housing_score = 1 - result.get('poor_roof_materials_index', 0.5)
+            print(f"{housing_score:<12.3f}", end='')
+        if 'infrastructure' in measures:
+            water_score = 1 - result.get('water_access_deficit', 0.5)
+            print(f"{water_score:<12.3f}", end='')
+        if 'environmental' in measures:
+            env_score = result.get('mean_ndvi', 0.3)
+            print(f"{env_score:<12.3f}", end='')
+        if 'population' in measures:
+            pop_density = result.get('population_density_per_km2', 0)
+            print(f"{pop_density:<12.0f}", end='')
+        if 'access' in measures:
+            access_score = result.get('market_access_score', 0.5)
+            print(f"{access_score:<12.3f}", end='')
+        if 'roads' in measures:
+            road_score = result.get('road_infrastructure_score', 0.5)
+            print(f"{road_score:<12.3f}", end='')
+        if 'mpi' in measures:
+            mpi_score = result.get('enhanced_mpi', result.get('multidimensional_poverty_index', 0))
+            print(f"{mpi_score:<12.3f}", end='')
+        
+        print()  # New line
+    
+    return all_results
+
+def inspect_individual_measures_comparison(analyzer, locations):
+    """Compare individual poverty measures across multiple locations"""
+    print("🔍 INDIVIDUAL MEASURES COMPARISON ACROSS LOCATIONS")
+    print("="*80)
+    
+    all_individual_results = {}
+    
+    for location in locations:
+        location_name = location['name']
+        print(f"\n📍 Individual Inspection: {location_name}")
+        print("-" * 50)
+        
+        # Extract location parameters
+        params = {k: v for k, v in location.items() if k != 'name'}
+        
+        # Run individual inspections
+        individual_results = {
+            'nighttime_lights': analyzer.inspect_nighttime_lights_only(**params),
+            'housing_quality': analyzer.inspect_housing_quality_only(**params),
+            'infrastructure': analyzer.inspect_infrastructure_only(params['lat'], params['lon'], params['radius_km']),
+            'environmental': analyzer.inspect_environmental_only(**params),
+            'population': analyzer.inspect_population_only(params['lat'], params['lon'], params['radius_km']),
+            'access': analyzer.inspect_access_only(params['lat'], params['lon'], params['radius_km']),
+            'road_quality': analyzer.inspect_road_quality_only(**params)
+        }
+        
+        all_individual_results[location_name] = individual_results
+    
+    # Summary comparison table
+    print(f"\n📊 INDIVIDUAL MEASURES COMPARISON TABLE:")
+    print("-" * 120)
+    header = f"{'Location':<20} {'NTL Score':<12} {'Housing':<12} {'Water':<12} {'Environment':<12} {'Population':<12} {'Access':<12} {'Roads':<12}"
+    print(header)
+    print("-" * 120)
+    
+    for location_name, measures in all_individual_results.items():
+        # Extract key scores for comparison
+        ntl_score = 1 - measures['nighttime_lights'].get('electrification_deficit', 0.5)
+        housing_score = 1 - measures['housing_quality'].get('poor_roof_materials_index', 0.5)
+        water_score = 1 - measures['infrastructure'].get('water_access_deficit', 0.5)
+        env_score = measures['environmental'].get('mean_ndvi', 0.3)
+        pop_score = min(1.0, measures['population'].get('population_density_per_km2', 1000) / 3000)
+        access_score = measures['access'].get('market_access_score', 0.5)
+        road_score = measures['road_quality'].get('road_infrastructure_score', 0.5)
+        
+        print(f"{location_name:<20} {ntl_score:<12.3f} {housing_score:<12.3f} {water_score:<12.3f} {env_score:<12.3f} {pop_score:<12.3f} {access_score:<12.3f} {road_score:<12.3f}")
+    
+    return all_individual_results
+
+def quick_ntl_comparison(analyzer, locations):
+    """Quick comparison of only nighttime lights across locations"""
+    print("🌙 QUICK NIGHTTIME LIGHTS COMPARISON")
+    print("="*50)
+    
+    results = []
+    for location in locations:
+        params = {k: v for k, v in location.items() if k != 'name'}
+        ntl_result = analyzer.analyze_ntl_only(**params)
+        ntl_result['location_name'] = location['name']
+        results.append(ntl_result)
+    
+    # Simple comparison table
+    print(f"\n{'Location':<25} {'Electrification':<15} {'Economic Activity':<18} {'Poverty Risk'}")
+    print("-" * 75)
+    
+    for result in results:
+        electrification = 1 - result.get('electrification_deficit', 0)
+        economic_activity = 1 - result.get('economic_isolation_index', 0)
+        poverty_risk = "Low" if electrification > 0.7 else "Moderate" if electrification > 0.4 else "High"
+        
+        print(f"{result['location_name']:<25} {electrification:<15.3f} {economic_activity:<18.3f} {poverty_risk}")
+    
+    return results
 
 def create_enhanced_poverty_dataset(results_list, output_file='enhanced_poverty_dataset.csv'):
     """Create a comprehensive dataset from multiple enhanced poverty analyses"""
@@ -1168,9 +1973,52 @@ def create_enhanced_poverty_dataset(results_list, output_file='enhanced_poverty_
     print(f"📊 Dataset contains {len(df)} locations and {len(poverty_indicators)} indicators")
     print(f"🆕 New indicators include: hospital access, airport access, market access, road quality")
     
+    return dfscore', 'living_standards_score', 'environmental_deprivation_score',
+        
+        # Enhanced access indicators (NEW)
+        'hospital_access_deficit', 'distance_to_nearest_major_city_km',
+        'airport_access_deficit', 'distance_to_nearest_airport_km',
+        'market_access_deficit', 'market_access_score', 'economic_opportunities_index',
+        'surrounding_population_10km',
+        
+        # Road quality indicators (NEW)
+        'road_quality_deficit', 'road_infrastructure_score', 'road_surface_quality',
+        'paved_road_index', 'unpaved_road_index',
+        
+        # Enhanced dimension scores (NEW)
+        'access_deprivation_score', 'connectivity_isolation_score',
+        
+        # Isolation indices
+        'healthcare_isolation_index', 'transportation_isolation'
+    ]
+    
+    # Extract data for each location
+    dataset = []
+    for results in results_list:
+        row = {}
+        for indicator in poverty_indicators:
+            row[indicator] = results.get(indicator, None)
+        
+        # Add location name if available
+        if 'location_name' in results:
+            row['location_name'] = results['location_name']
+            
+        dataset.append(row)
+    
+    # Create DataFrame and save
+    df = pd.DataFrame(dataset)
+    df.to_csv(output_file, index=False)
+    
+    print(f"💾 Enhanced poverty indicators dataset saved to: {output_file}")
+    print(f"📊 Dataset contains {len(df)} locations and {len(poverty_indicators)} indicators")
+    print(f"🆕 New indicators include: hospital access, airport access, market access, road quality")
+    
     return df
 
-# Testing functions for enhanced poverty analysis
+# ========================================
+# TESTING FUNCTIONS WITH SELECTIVE ANALYSIS
+# ========================================
+
 def test_enhanced_poverty_analysis():
     """Test enhanced poverty analysis with known locations"""
     print("🧪 TESTING ENHANCED SATELLITE-BASED POVERTY ANALYSIS")
@@ -1199,28 +2047,187 @@ def test_enhanced_poverty_analysis():
     # Analyze each location
     results = compare_poverty_levels(analyzer, test_locations)
     
+    # Test individual measures comparison
+    individual_comparison = inspect_individual_measures_comparison(analyzer, test_locations[:3])  # First 3 for demo
+    
     # Create enhanced research dataset
     dataset = create_enhanced_poverty_dataset(results)
     
-    return results, dataset
+    return results, individual_comparison, dataset
 
-# Main execution
+def demo_selective_analysis():
+    """Demonstrate selective analysis capabilities"""
+    print("🎯 DEMONSTRATION: SELECTIVE POVERTY ANALYSIS")
+    print("="*70)
+    
+    analyzer = EnhancedSatellitePovertyAnalyzer()
+    
+    # Test location
+    lat, lon, radius = 23.75263611, 87.21012500, 4  # Bardhaman
+    
+    print(f"\n🎯 SELECTIVE ANALYSIS DEMO")
+    print(f"📍 Test Location: Bardhaman ({lat:.4f}, {lon:.4f})")
+    
+    # Demo different selective analyses
+    print(f"\n" + "="*60)
+    print("🌙 1. NIGHTTIME LIGHTS ONLY")
+    ntl_only = analyzer.analyze_ntl_only(lat, lon, radius, detailed=True)
+    
+    print(f"\n" + "="*60)
+    print("🏠 2. HOUSING QUALITY ONLY")
+    housing_only = analyzer.analyze_housing_only(lat, lon, radius, detailed=True)
+    
+    print(f"\n" + "="*60)
+    print("🏥 3. ACCESS INDICATORS ONLY")
+    access_only = analyzer.analyze_access_only(lat, lon, radius, detailed=True)
+    
+    print(f"\n" + "="*60)
+    print("🎯 4. CUSTOM COMBINATION: NTL + HOUSING + ACCESS")
+    custom_combo = analyzer.analyze_custom_combination(lat, lon, radius, 
+                                                      measures=['ntl', 'housing', 'access', 'mpi'], 
+                                                      detailed=True)
+    
+    print(f"\n" + "="*60)
+    print("🔍 5. SELECTIVE MEASURES WITH FLEXIBLE INPUT")
+    # Test flexible input formats
+    flexible_analysis = analyzer.analyze_selective_measures(lat, lon, radius, 
+                                                           measures=['economic', 'env', 'roads'], 
+                                                           detailed_output=True)
+    
+    return {
+        'ntl_only': ntl_only,
+        'housing_only': housing_only,
+        'access_only': access_only,
+        'custom_combo': custom_combo,
+        'flexible_analysis': flexible_analysis
+    }
+
+def demo_individual_inspections():
+    """Demonstrate individual measure inspection capabilities"""
+    print("🎯 DEMONSTRATION: INDIVIDUAL MEASURE INSPECTIONS")
+    print("="*70)
+    
+    analyzer = EnhancedSatellitePovertyAnalyzer()
+    
+    # Test location
+    lat, lon, radius = 23.75263611, 87.21012500, 4  # Bardhaman
+    
+    print(f"\n🎯 INDIVIDUAL MEASURE INSPECTION DEMO")
+    print(f"📍 Test Location: Bardhaman ({lat:.4f}, {lon:.4f})")
+    
+    # Demo each individual inspection
+    print(f"\n" + "="*50)
+    print("🔍 1. NIGHTTIME LIGHTS ONLY")
+    ntl_results = analyzer.inspect_nighttime_lights_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 2. HOUSING QUALITY ONLY") 
+    housing_results = analyzer.inspect_housing_quality_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 3. INFRASTRUCTURE ONLY")
+    infra_results = analyzer.inspect_infrastructure_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 4. ENVIRONMENTAL ONLY")
+    env_results = analyzer.inspect_environmental_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 5. POPULATION ONLY")
+    pop_results = analyzer.inspect_population_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 6. ACCESS ONLY")
+    access_results = analyzer.inspect_access_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 7. ROAD QUALITY ONLY")
+    road_results = analyzer.inspect_road_quality_only(lat, lon, radius)
+    
+    print(f"\n" + "="*50)
+    print("🔍 8. ALL MEASURES WITH DETAILED OUTPUT")
+    detailed_results = analyzer.inspect_all_measures_detailed(lat, lon, radius)
+    
+    return {
+        'nighttime_lights': ntl_results,
+        'housing': housing_results, 
+        'infrastructure': infra_results,
+        'environmental': env_results,
+        'population': pop_results,
+        'access': access_results,
+        'road_quality': road_results,
+        'comprehensive_detailed': detailed_results
+    }
+
+def demo_comparison_methods():
+    """Demonstrate different comparison methods"""
+    print("📊 DEMONSTRATION: COMPARISON METHODS")
+    print("="*70)
+    
+    analyzer = EnhancedSatellitePovertyAnalyzer()
+    
+    # Test locations
+    test_locations = [
+        {"name": "Bardhaman", "lat": 23.75263611, "lon": 87.21012500, "radius_km": 4},
+        {"name": "Darjeeling", "lat": 27.04170278, "lon": 88.26640556, "radius_km": 4},
+        {"name": "Kolkata Central", "lat": 22.5726, "lon": 88.3639, "radius_km": 3}
+    ]
+    
+    print(f"\n🌙 1. QUICK NTL COMPARISON")
+    ntl_comparison = quick_ntl_comparison(analyzer, test_locations)
+    
+    print(f"\n🎯 2. SELECTIVE MEASURES COMPARISON")
+    selective_comparison = compare_selective_measures(analyzer, test_locations, 
+                                                    measures=['ntl', 'housing', 'access'])
+    
+    print(f"\n🔍 3. INDIVIDUAL MEASURES COMPARISON")
+    individual_comparison = inspect_individual_measures_comparison(analyzer, test_locations)
+    
+    print(f"\n📊 4. COMPREHENSIVE COMPARISON")
+    comprehensive_comparison = compare_poverty_levels(analyzer, test_locations)
+    
+    return {
+        'ntl_comparison': ntl_comparison,
+        'selective_comparison': selective_comparison,
+        'individual_comparison': individual_comparison,
+        'comprehensive_comparison': comprehensive_comparison
+    }
+
+# ========================================
+# MAIN EXECUTION WITH SELECTIVE ANALYSIS OPTIONS
+# ========================================
+
 if __name__ == "__main__":
     print("🚀 ENHANCED SATELLITE-BASED POVERTY ANALYSIS SYSTEM")
     print("="*70)
-    print("🌟 Now including hospital, airport, market access and road quality indicators")
+    print("🌟 NOW WITH SELECTIVE ANALYSIS CAPABILITIES!")
+    print("🎯 Analyze ANY specific measure at ANY lat/long")
+    print("🔍 Flexible input: 'ntl', 'housing', 'access', 'environmental', etc.")
+    print("📊 Quick methods: analyze_ntl_only(), analyze_housing_only(), etc.")
     
     # Initialize enhanced analyzer
     analyzer = EnhancedSatellitePovertyAnalyzer()
     
-    # Define test locations for comparison
+    # Demo selective analysis capabilities
+    print(f"\n🎯 RUNNING SELECTIVE ANALYSIS DEMO...")
+    selective_demo = demo_selective_analysis()
+    
+    # Demo individual inspections
+    print(f"\n🔍 RUNNING INDIVIDUAL INSPECTION DEMO...")
+    individual_demo = demo_individual_inspections()
+    
+    # Demo comparison methods
+    print(f"\n📊 RUNNING COMPARISON METHODS DEMO...")
+    comparison_demo = demo_comparison_methods()
+    
+    # Define test locations for final comprehensive analysis
     test_locations = [
         {"name": "Bardhaman", "lat": 23.75263611, "lon": 87.21012500, "radius_km": 4},
         {"name": "Darjeeling", "lat": 27.04170278, "lon": 88.26640556, "radius_km": 4}
     ]
     
-     # Run enhanced comparative analysis
-    print("\n🔍 Running enhanced poverty analysis with access indicators...")
+    # Run enhanced comparative analysis
+    print(f"\n🔍 Running enhanced poverty analysis with access indicators...")
     results = compare_poverty_levels(analyzer, test_locations)
     
     # Save results with timestamp
@@ -1235,4 +2242,32 @@ if __name__ == "__main__":
     # Create enhanced dataset
     dataset = create_enhanced_poverty_dataset(results, f"enhanced_poverty_dataset_{timestamp}.csv")
     
-    print(f"📊 Enhanced analysis complete! Dataset has {len(dataset)} locations with {len(dataset.columns)} indicators.")
+    print(f"\n🎯 ANALYSIS COMPLETE!")
+    print(f"📊 Enhanced analysis with {len(dataset)} locations and {len(dataset.columns)} indicators.")
+    print(f"🔍 Individual inspection capabilities demonstrated.")
+    print(f"🎯 Selective analysis capabilities demonstrated.")
+    print(f"✨ You can now analyze ANY specific measure at ANY location!")
+    
+    # Usage examples
+    print(f"\n💡 USAGE EXAMPLES:")
+    print(f"   # Quick NTL analysis at any location:")
+    print(f"   analyzer.analyze_ntl_only(lat, lon, radius)")
+    print(f"   ")
+    print(f"   # Housing quality only with details:")
+    print(f"   analyzer.analyze_housing_only(lat, lon, radius, detailed=True)")
+    print(f"   ")
+    print(f"   # Custom combination of measures:")
+    print(f"   analyzer.analyze_custom_combination(lat, lon, radius, ['ntl', 'access', 'mpi'])")
+    print(f"   ")
+    print(f"   # Flexible selective analysis:")
+    print(f"   analyzer.analyze_selective_measures(lat, lon, radius, measures=['economic', 'env'])")
+    print(f"   ")
+    print(f"   # Individual inspection with details:")
+    print(f"   analyzer.inspect_nighttime_lights_only(lat, lon, radius)")
+    print(f"   ")
+    print(f"   # Original comprehensive analysis (unchanged):")
+    print(f"   analyzer.analyze_poverty_conditions(lat, lon, radius)")
+    print(f"   ")
+    print(f"   # Quick comparisons:")
+    print(f"   quick_ntl_comparison(analyzer, locations)")
+    print(f"   compare_selective_measures(analyzer, locations, ['ntl', 'housing'])")

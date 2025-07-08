@@ -1,0 +1,15 @@
+2025-07-06 01:24:26,318 - __main__ - ERROR - Error extracting infrastructure features: Kernel can only be used as a cast to Kernel. Found <class 'int'>.
+2025-07-06 01:25:18,569 - __main__ - ERROR - Error extracting infrastructure features: Kernel can only be used as a cast to Kernel. Found <class 'int'>.
+2025-07-06 01:25:56,941 - __main__ - ERROR - Error extracting infrastructure features: Kernel can only be used as a cast to Kernel. Found <class 'int'>.
+2025-07-06 01:38:48,046 - __main__ - INFO - GEE initialized with project: ed-sayandasgupta97
+2025-07-06 01:38:48,295 - __main__ - INFO - Deep learning model initialized
+2025-07-06 01:38:48,296 - __main__ - INFO - Ensemble models initialized
+2025-07-06 01:38:48,296 - __main__ - INFO - Analyzing location: (26.1325, 87.4778)
+2025-07-06 01:38:48,296 - __main__ - INFO - Extracting enhanced satellite features...
+2025-07-06 01:39:40,986 - __main__ - ERROR - Error extracting infrastructure features: Image.distance() got an unexpected keyword argument 'searchRadius'
+2025-07-06 01:39:40,988 - __main__ - INFO - Analyzing location: (18.9256, 72.8242)
+2025-07-06 01:39:40,989 - __main__ - INFO - Extracting enhanced satellite features...
+2025-07-06 01:40:08,812 - __main__ - ERROR - Error extracting infrastructure features: Image.distance() got an unexpected keyword argument 'searchRadius'
+2025-07-06 01:40:08,814 - __main__ - INFO - Analyzing location: (18.5074, 73.8077)
+2025-07-06 01:40:08,814 - __main__ - INFO - Extracting enhanced satellite features...
+2025-07-06 01:40:33,402 - __main__ - ERROR - Error extracting infrastructure features: Image.distance() got an unexpected keyword argument 'searchRadius'
